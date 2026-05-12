@@ -1,0 +1,24 @@
+html {
+  height: 100vh;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+}
+
+body {
+  background: #f5f6f8;
+  color: #111827;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
