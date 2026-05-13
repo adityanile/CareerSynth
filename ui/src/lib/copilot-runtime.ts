@@ -44,18 +44,24 @@ function normalizePath(path: string): string {
 function getRuntimeHandlers(
   integrationId: string,
   basePath: string,
+  accessToken?: string,
 ): RuntimeHandlers {
   const cacheKey = `${integrationId}::${basePath}`;
-  const existing = runtimeHandlerCache.get(cacheKey);
-  if (existing) {
-    return existing;
+  if (!accessToken) {
+    const existing = runtimeHandlerCache.get(cacheKey);
+    if (existing) {
+      return existing;
+    }
   }
 
   const { agentId, agentUrl } = resolveIntegrationConfig(integrationId);
+  const headers = accessToken
+    ? { Authorization: `Bearer ${accessToken}` }
+    : undefined;
   const serviceAdapter = new ExperimentalEmptyAdapter();
   const runtime = new CopilotRuntime({
     agents: {
-      [agentId]: new HttpAgent({ url: agentUrl }),
+      [agentId]: new HttpAgent({ url: agentUrl, headers }),
     },
   });
 
@@ -78,7 +84,10 @@ function getRuntimeHandlers(
     singleRoute: honoHandle(singleRouteApp),
   };
 
-  runtimeHandlerCache.set(cacheKey, handlers);
+  if (!accessToken) {
+    runtimeHandlerCache.set(cacheKey, handlers);
+  }
+
   return handlers;
 }
 
@@ -105,8 +114,9 @@ export async function handleCopilotRuntimeRequest(
   req: NextRequest,
   integrationId: string,
   basePath: string,
+  accessToken?: string,
 ) {
-  const handlers = getRuntimeHandlers(integrationId, basePath);
+  const handlers = getRuntimeHandlers(integrationId, basePath, accessToken);
   const singleRouteRequest = req.clone();
   const response = await handlers.multiRoute(req);
 

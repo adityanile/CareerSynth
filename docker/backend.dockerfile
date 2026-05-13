@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN pip3 install --no-cache-dir --break-system-packages uv
 
-COPY docker/requirements.txt /app/requirements.txt
+COPY requirements.txt /app/requirements.txt
 RUN uv pip install --system --break-system-packages --prerelease=allow --no-cache -r /app/requirements.txt
 
 #COPY . /app

@@ -3,6 +3,7 @@
 import "@copilotkit/react-core/v2/styles.css";
 import { CopilotKit } from "@copilotkit/react-core";
 import { MultiConversationChat } from "@/components/multi-conversation-chat";
+import { getEntraAccessToken } from "@/lib/entra-token-store";
 
 interface AgenticChatProps {
   integrationId: string;
@@ -19,6 +20,12 @@ export function AgenticChat({ integrationId }: AgenticChatProps) {
     <CopilotKit
       runtimeUrl={`/api/copilotkit/${integrationId}`}
       agent={agentId}
+      headers={() => {
+        const accessToken = getEntraAccessToken();
+        return accessToken
+          ? { Authorization: `Bearer ${accessToken}` }
+          : {};
+      }}
       {...providerConfig}
     >
       <MultiConversationChat agentId={agentId} hasPublicKey={Boolean(publicApiKey)} />

@@ -1,4 +1,5 @@
 import { AgenticChat } from "@/components/agentic-chat";
+import { EntraAuthGate } from "@/components/entra-auth-gate";
 
 interface IntegrationPageProps {
   params: Promise<{
@@ -9,5 +10,9 @@ interface IntegrationPageProps {
 export default async function IntegrationPage({ params }: IntegrationPageProps) {
   const { integrationId } = await params;
 
-  return <AgenticChat integrationId={integrationId} />;
+  return (
+    <EntraAuthGate>
+      <AgenticChat integrationId={integrationId} />
+    </EntraAuthGate>
+  );
 }

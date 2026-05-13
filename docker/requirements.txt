@@ -4,3 +4,4 @@ python-dotenv
 azure-storage-blob
 agent-framework
 agent-framework-ag-ui
+fastapi-microsoft-identity

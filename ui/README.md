@@ -23,11 +23,21 @@ Key variables:
 - `AG_UI_AGENT_URL`: URL for your running AG-UI backend (default: `http://127.0.0.1:8888/`)
 - `COPILOT_AGENT_ID` and `NEXT_PUBLIC_COPILOT_AGENT_ID`: runtime/UI agent IDs (if unset on UI, it falls back to `integrationId`)
 - `NEXT_PUBLIC_COPILOT_PUBLIC_API_KEY` (or `NEXT_PUBLIC_COPILOT_PUBLIC_LICENSE_KEY`): required for cross-session persistent threads on Copilot Cloud/Intelligence
+- `NEXT_PUBLIC_ENTRA_CLIENT_ID` and `NEXT_PUBLIC_ENTRA_TENANT_ID`: required for Microsoft Entra sign-in
+- `NEXT_PUBLIC_ENTRA_API_SCOPES` (optional but recommended): API scope used to mint bearer tokens sent to backend (for example `api://<api-client-id>/User`)
+- `ENTRA_AUTH_REQUIRED`: when `true`, runtime API routes reject requests that don't have an `Authorization: Bearer <token>` header
 
 Optional per-integration overrides are also supported:
 
 - `AG_UI_AGENT_URL_<INTEGRATION_ID>`
 - `COPILOT_AGENT_ID_<INTEGRATION_ID>`
+
+## 1.1 Entra setup checklist
+
+1. Register or select a Microsoft Entra app for the SPA.
+2. Add redirect URI `http://localhost:3000` under the **Single-page application** platform.
+3. If backend token validation is enabled, expose and grant an API scope (for example `api://<api-app-id>/User`) and set it in `NEXT_PUBLIC_ENTRA_API_SCOPES`.
+4. Keep `ENTRA_AUTH_REQUIRED=true` for protected runtime routes.
 
 ## 2. Run backend and frontend
 
@@ -55,3 +65,4 @@ Open `http://localhost:3000` (it redirects to `/<COPILOT_DEFAULT_INTEGRATION_ID>
 ## Notes
 
 - Without a Copilot public key, chat still works, but persistent multi-session thread history will not be available.
+- The app includes an MSAL redirect bridge page at `/redirect` for compatibility with current MSAL browser guidance.

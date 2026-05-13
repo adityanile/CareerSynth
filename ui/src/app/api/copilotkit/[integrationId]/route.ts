@@ -12,10 +12,22 @@ const handleIntegrationRequest = async (
   context: IntegrationRouteContext,
 ) => {
   const { integrationId } = await context.params;
+  const authorizationHeader = req.headers.get("authorization");
+  const accessToken =
+    authorizationHeader?.startsWith("Bearer ")
+      ? authorizationHeader.slice("Bearer ".length).trim()
+      : undefined;
+  const authRequired = process.env.ENTRA_AUTH_REQUIRED === "true";
+
+  if (authRequired && !accessToken) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   return handleCopilotRuntimeRequest(
     req,
     integrationId,
     `/api/copilotkit/${integrationId}`,
+    accessToken,
   );
 };
 

@@ -1,14 +1,23 @@
 import os
-
 from dotenv import load_dotenv
 from agent_framework import Agent
 from agent_framework.openai import OpenAIChatClient
 from agent_framework_ag_ui import add_agent_framework_fastapi_endpoint
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi_microsoft_identity import AuthError, initialize, requires_auth, validate_scope
 
 from resume_pdf_tool import generate_resume_pdf
 
 load_dotenv()
+
+entra_tenant_id = os.getenv("ENTRA_TENANT_ID")
+entra_client_id = os.getenv("ENTRA_CLIENT_ID")
+
+if not entra_tenant_id or not entra_client_id:
+    raise RuntimeError("ENTRA_TENANT_ID and ENTRA_CLIENT_ID are required.")
+
+initialize(tenant_id_=entra_tenant_id, client_id_=entra_client_id)
+entra_required_scope = os.getenv("ENTRA_REQUIRED_SCOPE", "User")
 
 
 client = OpenAIChatClient(
@@ -72,7 +81,21 @@ app = FastAPI(title="AG-UI Server")
 
 add_agent_framework_fastapi_endpoint(app, agent, "/")
 
+@app.get("/health")
+def home():
+    return {"status":"ok"}
+
+
+@app.get("/auth/test")
+@requires_auth
+async def auth_test(request: Request):
+    try:
+        validate_scope(required_scope=entra_required_scope, request=request)
+        return {"message": "You are authenticated"}
+    except AuthError as exc:
+        return {"error": exc.error_msg}
+
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8888)
+    uvicorn.run("server:app", host="0.0.0.0", port=8888, reload=True)
