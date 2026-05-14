@@ -4,7 +4,7 @@ from typing import Any
 from agent_framework import tool
 
 from agent_request_context import require_current_oid
-from project_tools import create_project_for_user
+from project_tools import create_project_for_user, list_projects_for_user
 from tool_response import format_tool_failure
 
 
@@ -60,6 +60,34 @@ def create_project_from_context_tool(
             tags=_coerce_string_list(resolved_tags),
         )
         return _tool_success(project)
+    except Exception as exc:
+        error = str(exc)
+        return _tool_failure(tool_name, error)
+
+
+@tool(
+    name="query_projects",
+    description="Get projects for the authenticated user from request context",
+)
+def query_projects_from_context_tool(
+    tag: str = "",
+    tags: str = "",
+    tech: str = "",
+    techs: str = "",
+    name: str = "",
+) -> dict[str, Any] | str:
+    tool_name = "query_projects"
+    try:
+        oid = require_current_oid()
+        projects = list_projects_for_user(
+            oid=oid,
+            tag=tag or None,
+            tags=tags or None,
+            tech=tech or None,
+            techs=techs or None,
+            name=name or None,
+        )
+        return _tool_success({"items": projects})
     except Exception as exc:
         error = str(exc)
         return _tool_failure(tool_name, error)

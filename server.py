@@ -13,8 +13,10 @@ from fastapi_microsoft_identity import AuthError, initialize, requires_auth, val
 from agent_profile_tools import (
     create_achievement_from_context_tool,
     create_experience_from_context_tool,
+    query_achievements_from_context_tool,
+    query_experiences_from_context_tool,
 )
-from agent_project_tools import create_project_from_context_tool
+from agent_project_tools import create_project_from_context_tool, query_projects_from_context_tool
 from agent_request_context import reset_current_oid, set_current_oid
 from models import (
     AchievementCreate,
@@ -40,6 +42,8 @@ from profile_tools import (
     configure_profile_db,
     create_achievement_for_user,
     create_experience_for_user,
+    list_achievements_for_user,
+    list_experiences_for_user,
 )
 from resume_pdf_tool import generate_resume_pdf
 from tool_call_sequence_middleware import ToolCallSequenceRepairMiddleware
@@ -69,8 +73,11 @@ You are the main CareerSynth agent.
 
 Tool usage rules:
 - Handle project operations directly with `create_project`.
+- Handle project queries directly with `query_projects`.
 - Handle experience operations directly with `create_experience`.
+- Handle experience queries directly with `query_experiences`.
 - Handle achievement operations directly with `create_achievement`.
+- Handle achievement queries directly with `query_achievements`.
 - Never ask the user for `oid` for these operations. It is injected from authenticated request context.
 - Do not claim an operation succeeded unless the corresponding tool call succeeds.
 
@@ -101,8 +108,11 @@ agent = Agent(
     tools=[
         generate_resume_pdf,
         create_project_from_context_tool,
+        query_projects_from_context_tool,
         create_experience_from_context_tool,
+        query_experiences_from_context_tool,
         create_achievement_from_context_tool,
+        query_achievements_from_context_tool,
     ],
 )
 
@@ -355,19 +365,8 @@ async def list_experiences(
     position: Optional[str] = Query(default=None),
 ) -> dict[str, Any]:
     oid = authorize_and_get_oid(request)
-    where_clauses = ["oid = ?"]
-    params: list[Any] = [oid]
-
-    if position and position.strip():
-        where_clauses.append("position = ?")
-        params.append(position.strip())
-
-    sql = f"SELECT * FROM experiences WHERE {' AND '.join(where_clauses)} ORDER BY id DESC"
-
-    with get_db_connection() as conn:
-        rows = conn.execute(sql, params).fetchall()
-
-    return {"items": [row_to_experience(row) for row in rows]}
+    items = list_experiences_for_user(oid=oid, position=position)
+    return {"items": items}
 
 
 @app.post("/api/experiences", status_code=201)
@@ -411,14 +410,8 @@ async def get_experiences_by_position(request: Request, position: str) -> dict[s
     position_value = position.strip()
     if not position_value:
         raise HTTPException(status_code=400, detail="position is required")
-
-    with get_db_connection() as conn:
-        rows = conn.execute(
-            "SELECT * FROM experiences WHERE oid = ? AND position = ? ORDER BY id DESC",
-            (oid, position_value),
-        ).fetchall()
-
-    return {"items": [row_to_experience(row) for row in rows]}
+    items = list_experiences_for_user(oid=oid, position=position_value)
+    return {"items": items}
 
 
 @app.get("/api/experiences/by-company/{company_name}")
@@ -428,14 +421,8 @@ async def get_experiences_by_company(request: Request, company_name: str) -> dic
     company_value = company_name.strip()
     if not company_value:
         raise HTTPException(status_code=400, detail="company_name is required")
-
-    with get_db_connection() as conn:
-        rows = conn.execute(
-            "SELECT * FROM experiences WHERE oid = ? AND company_name = ? ORDER BY id DESC",
-            (oid, company_value),
-        ).fetchall()
-
-    return {"items": [row_to_experience(row) for row in rows]}
+    items = list_experiences_for_user(oid=oid, company_name=company_value)
+    return {"items": items}
 
 
 @app.patch("/api/experiences/{experience_id}")
@@ -533,23 +520,8 @@ async def list_achievements(
     name: Optional[str] = Query(default=None),
 ) -> dict[str, Any]:
     oid = authorize_and_get_oid(request)
-    where_clauses = ["oid = ?"]
-    params: list[Any] = [oid]
-
-    if organisation and organisation.strip():
-        where_clauses.append("organisation = ?")
-        params.append(organisation.strip())
-
-    if name and name.strip():
-        where_clauses.append("name = ?")
-        params.append(name.strip())
-
-    sql = f"SELECT * FROM achievements WHERE {' AND '.join(where_clauses)} ORDER BY id DESC"
-
-    with get_db_connection() as conn:
-        rows = conn.execute(sql, params).fetchall()
-
-    return {"items": [row_to_achievement(row) for row in rows]}
+    items = list_achievements_for_user(oid=oid, organisation=organisation, name=name)
+    return {"items": items}
 
 
 @app.post("/api/achievements", status_code=201)
@@ -591,14 +563,8 @@ async def get_achievements_by_organisation(request: Request, organisation: str) 
     organisation_value = organisation.strip()
     if not organisation_value:
         raise HTTPException(status_code=400, detail="organisation is required")
-
-    with get_db_connection() as conn:
-        rows = conn.execute(
-            "SELECT * FROM achievements WHERE oid = ? AND organisation = ? ORDER BY id DESC",
-            (oid, organisation_value),
-        ).fetchall()
-
-    return {"items": [row_to_achievement(row) for row in rows]}
+    items = list_achievements_for_user(oid=oid, organisation=organisation_value)
+    return {"items": items}
 
 
 @app.get("/api/achievements/by-name/{name}")
@@ -608,14 +574,8 @@ async def get_achievements_by_name(request: Request, name: str) -> dict[str, Any
     name_value = name.strip()
     if not name_value:
         raise HTTPException(status_code=400, detail="name is required")
-
-    with get_db_connection() as conn:
-        rows = conn.execute(
-            "SELECT * FROM achievements WHERE oid = ? AND name = ? ORDER BY id DESC",
-            (oid, name_value),
-        ).fetchall()
-
-    return {"items": [row_to_achievement(row) for row in rows]}
+    items = list_achievements_for_user(oid=oid, name=name_value)
+    return {"items": items}
 
 
 @app.patch("/api/achievements/{achievement_id}")

@@ -60,6 +60,55 @@ def _row_to_achievement(row: sqlite3.Row) -> dict[str, Any]:
     }
 
 
+def _list_rows_for_oid(
+    *,
+    table: str,
+    oid: str,
+    filters: dict[str, Optional[str]] | None = None,
+) -> list[sqlite3.Row]:
+    where_clauses = ["oid = ?"]
+    params: list[Any] = [oid]
+
+    for column, value in (filters or {}).items():
+        if value is None:
+            continue
+        normalized = value.strip()
+        if not normalized:
+            continue
+        where_clauses.append(f"{column} = ?")
+        params.append(normalized)
+
+    sql = f"SELECT * FROM {table} WHERE {' AND '.join(where_clauses)} ORDER BY id DESC"
+    with _get_db_connection() as conn:
+        return conn.execute(sql, params).fetchall()
+
+
+def list_experiences_for_user(
+    oid: str,
+    position: Optional[str] = None,
+    company_name: Optional[str] = None,
+) -> list[dict[str, Any]]:
+    rows = _list_rows_for_oid(
+        table="experiences",
+        oid=oid,
+        filters={"position": position, "company_name": company_name},
+    )
+    return [_row_to_experience(row) for row in rows]
+
+
+def list_achievements_for_user(
+    oid: str,
+    organisation: Optional[str] = None,
+    name: Optional[str] = None,
+) -> list[dict[str, Any]]:
+    rows = _list_rows_for_oid(
+        table="achievements",
+        oid=oid,
+        filters={"organisation": organisation, "name": name},
+    )
+    return [_row_to_achievement(row) for row in rows]
+
+
 def create_experience_for_user(
     oid: str,
     company_name: str,

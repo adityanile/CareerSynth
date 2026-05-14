@@ -3,7 +3,12 @@ from typing import Any
 from agent_framework import tool
 
 from agent_request_context import require_current_oid
-from profile_tools import create_achievement_for_user, create_experience_for_user
+from profile_tools import (
+    create_achievement_for_user,
+    create_experience_for_user,
+    list_achievements_for_user,
+    list_experiences_for_user,
+)
 from tool_response import format_tool_failure
 
 
@@ -84,6 +89,54 @@ def create_achievement_from_context_tool(
             date=date,
         )
         return _tool_success(achievement)
+    except Exception as exc:
+        error = str(exc)
+        return _tool_failure(tool_name, error)
+
+
+@tool(
+    name="query_experiences",
+    description="Get experiences for the authenticated user from request context",
+)
+def query_experiences_from_context_tool(
+    position: str = "",
+    company_name: str = "",
+    companyName: str = "",
+) -> dict[str, Any] | str:
+    tool_name = "query_experiences"
+    try:
+        resolved_company_name = company_name or companyName
+        oid = require_current_oid()
+        experiences = list_experiences_for_user(
+            oid=oid,
+            position=position or None,
+            company_name=resolved_company_name or None,
+        )
+        return _tool_success({"items": experiences})
+    except Exception as exc:
+        error = str(exc)
+        return _tool_failure(tool_name, error)
+
+
+@tool(
+    name="query_achievements",
+    description="Get achievements for the authenticated user from request context",
+)
+def query_achievements_from_context_tool(
+    organisation: str = "",
+    name: str = "",
+    organization: str = "",
+) -> dict[str, Any] | str:
+    tool_name = "query_achievements"
+    try:
+        resolved_organisation = organisation or organization
+        oid = require_current_oid()
+        achievements = list_achievements_for_user(
+            oid=oid,
+            organisation=resolved_organisation or None,
+            name=name or None,
+        )
+        return _tool_success({"items": achievements})
     except Exception as exc:
         error = str(exc)
         return _tool_failure(tool_name, error)
