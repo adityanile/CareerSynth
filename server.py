@@ -5,13 +5,16 @@ from datetime import datetime
 from typing import Any, Optional
 
 from dotenv import load_dotenv
-from agent_framework import Agent, Message, Workflow, WorkflowBuilder, WorkflowContext, executor
-from agent_framework.openai import OpenAIChatClient
-from agent_framework.ag_ui import AgentFrameworkAgent, add_agent_framework_fastapi_endpoint
-from agent_framework.orchestrations import HandoffBuilder
+from agent_framework import Agent
+from agent_framework.openai import OpenAIChatCompletionClient
+from agent_framework.ag_ui import add_agent_framework_fastapi_endpoint
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi_microsoft_identity import AuthError, initialize, requires_auth, validate_scope
 
+from agent_profile_tools import (
+    create_achievement_from_context_tool,
+    create_experience_from_context_tool,
+)
 from agent_project_tools import create_project_from_context_tool
 from agent_request_context import reset_current_oid, set_current_oid
 from models import (
@@ -33,7 +36,14 @@ from project_tools import (
     list_projects_for_user,
     update_project_for_user,
 )
+from profile_tools import (
+    ProfileValidationError,
+    configure_profile_db,
+    create_achievement_for_user,
+    create_experience_for_user,
+)
 from resume_pdf_tool import generate_resume_pdf
+from tool_call_sequence_middleware import ToolCallSequenceRepairMiddleware
 
 from fastapi_microsoft_identity import auth_service as token_auth_service
 
@@ -49,8 +59,7 @@ initialize(tenant_id_=entra_tenant_id, client_id_=entra_client_id)
 entra_required_scope = os.getenv("ENTRA_REQUIRED_SCOPE", "User")
 db_path = os.getenv("SQLITE_DB_PATH", "careersynth.db")
 
-
-client = OpenAIChatClient(
+client = OpenAIChatCompletionClient(
     model=os.getenv("AZURE_OPENAI_DEPLOYMENT"),
     azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
     api_key=os.getenv("AZURE_OPENAI_API_KEY"),
@@ -65,6 +74,14 @@ Project tool rules:
 - Before calling `create_project`, collect all required fields: `name`, `tech_stack`, `urls`, `description`, `tags`, `summary`.
 - Do not claim a project was created unless the tool call succeeds.
 - Do not invent project records; creation must go through the tool.
+
+Experience and achievement tool rules:
+- When the user asks to create/add/save experience, you must use the `create_experience` tool.
+- Before calling `create_experience`, collect: `company_name`, `start_date`, `end_date` (nullable), `position`, `description`, `location`.
+- When the user asks to create/add/save an achievement, you must use the `create_achievement` tool.
+- Before calling `create_achievement`, collect: `name`, `link`, `organisation`, `date`.
+- Never ask the user for `oid` for these actions. It is injected from request context.
+- Do not claim experience/achievement creation unless the tool call succeeds.
 
 General behavior:
 - For resume drafting, refinement, LaTeX generation, and PDF generation, use `generate_resume_pdf` when needed.
@@ -82,7 +99,13 @@ agent = Agent(
     client=client,
     instructions=coordinator_instructions,
     name="main",
-    tools=[create_project_from_context_tool, generate_resume_pdf],
+    middleware=[ToolCallSequenceRepairMiddleware()],
+    tools=[
+        create_project_from_context_tool,
+        create_experience_from_context_tool,
+        create_achievement_from_context_tool,
+        generate_resume_pdf,
+    ],
 )
 
 
@@ -169,6 +192,7 @@ def init_db() -> None:
 def on_startup() -> None:
     init_db()
     configure_project_db(db_path)
+    configure_profile_db(db_path)
 
 
 def model_to_partial_dict(model: Any) -> dict[str, Any]:
@@ -180,12 +204,18 @@ def model_to_partial_dict(model: Any) -> dict[str, Any]:
 def validate_ddmmyyyy(value: Optional[str], field_name: str, allow_null: bool = False) -> None:
     if value is None and allow_null:
         return
+    if allow_null and isinstance(value, str) and not value.strip():
+        return
     if value is None:
         raise HTTPException(status_code=400, detail=f"{field_name} is required")
-    try:
-        datetime.strptime(value, "%d-%m-%Y")
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=f"{field_name} must be in DD-MM-YYYY format") from exc
+    normalized_value = value.strip()
+    for fmt in ("%d-%m-%Y", "%Y-%m-%d"):
+        try:
+            datetime.strptime(normalized_value, fmt)
+            return
+        except ValueError:
+            continue
+    raise HTTPException(status_code=400, detail=f"{field_name} must be in DD-MM-YYYY or YYYY-MM-DD format")
 
 
 def get_oid_or_401(request: Request) -> str:
@@ -355,36 +385,18 @@ async def list_experiences(
 @requires_auth
 async def create_experience(request: Request, payload: ExperienceCreate) -> dict[str, Any]:
     oid = authorize_and_get_oid(request)
-
-    company_name = payload.companyName.strip()
-    position = payload.position.strip()
-    description = payload.description.strip()
-    location = payload.location.strip()
-
-    if not company_name or not position or not description or not location:
-        raise HTTPException(
-            status_code=400,
-            detail="companyName, position, description and location are required",
+    try:
+        return create_experience_for_user(
+            oid=oid,
+            company_name=payload.companyName,
+            start_date=payload.startDate,
+            end_date=payload.endDate,
+            position=payload.position,
+            description=payload.description,
+            location=payload.location,
         )
-
-    validate_ddmmyyyy(payload.startDate, "startDate")
-    validate_ddmmyyyy(payload.endDate, "endDate", allow_null=True)
-
-    with get_db_connection() as conn:
-        cursor = conn.execute(
-            """
-            INSERT INTO experiences (oid, company_name, start_date, end_date, position, description, location)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (oid, company_name, payload.startDate, payload.endDate, position, description, location),
-        )
-        experience_id = cursor.lastrowid
-        row = conn.execute(
-            "SELECT * FROM experiences WHERE id = ? AND oid = ?",
-            (experience_id, oid),
-        ).fetchone()
-
-    return row_to_experience(row)
+    except ProfileValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/experiences/{experience_id}")
@@ -555,31 +567,16 @@ async def list_achievements(
 @requires_auth
 async def create_achievement(request: Request, payload: AchievementCreate) -> dict[str, Any]:
     oid = authorize_and_get_oid(request)
-
-    name = payload.name.strip()
-    link = payload.link.strip()
-    organisation = payload.organisation.strip()
-
-    if not name or not link or not organisation:
-        raise HTTPException(status_code=400, detail="name, link and organisation are required")
-
-    validate_ddmmyyyy(payload.date, "date")
-
-    with get_db_connection() as conn:
-        cursor = conn.execute(
-            """
-            INSERT INTO achievements (oid, name, link, organisation, date)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (oid, name, link, organisation, payload.date),
+    try:
+        return create_achievement_for_user(
+            oid=oid,
+            name=payload.name,
+            link=payload.link,
+            organisation=payload.organisation,
+            date=payload.date,
         )
-        achievement_id = cursor.lastrowid
-        row = conn.execute(
-            "SELECT * FROM achievements WHERE id = ? AND oid = ?",
-            (achievement_id, oid),
-        ).fetchone()
-
-    return row_to_achievement(row)
+    except ProfileValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/achievements/{achievement_id}")

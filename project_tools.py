@@ -2,9 +2,6 @@ import json
 import sqlite3
 from typing import Any, Optional
 
-from agent_framework import tool
-
-
 class ProjectValidationError(Exception):
     pass
 
@@ -34,9 +31,18 @@ def _parse_comma_separated(value: Optional[str]) -> list[str]:
 
 
 def _normalize_string_list(values: list[str], field_name: str) -> list[str]:
-    normalized = [item.strip() for item in values if isinstance(item, str) and item.strip()]
-    if len(normalized) != len(values):
-        raise ProjectValidationError(f"{field_name} must contain non-empty strings")
+    if values is None:
+        return []
+    if not isinstance(values, list):
+        raise ProjectValidationError(f"{field_name} must be a list of strings")
+    normalized: list[str] = []
+    for item in values:
+        if item is None:
+            continue
+        value = item if isinstance(item, str) else str(item)
+        value = value.strip()
+        if value:
+            normalized.append(value)
     return normalized
 
 
@@ -244,88 +250,3 @@ def delete_project_for_user(oid: str, project_id: int) -> None:
 
     if cursor.rowcount == 0:
         raise ProjectNotFoundError("Project not found")
-
-
-def _tool_success(data: Any) -> dict[str, Any]:
-    return {"ok": True, "data": data}
-
-
-def _tool_failure(error: str) -> dict[str, Any]:
-    return {"ok": False, "error": error}
-
-
-@tool(name="create_project", description="Create a project for a given user oid")
-def create_project_tool(
-    oid: str,
-    name: str,
-    tech_stack: list[str],
-    urls: list[str],
-    description: str,
-    tags: list[str],
-    summary: str,
-) -> dict[str, Any]:
-    try:
-        project = create_project_for_user(
-            oid=oid,
-            name=name,
-            tech_stack=tech_stack,
-            urls=urls,
-            description=description,
-            tags=tags,
-            summary=summary,
-        )
-        return _tool_success(project)
-    except (ProjectValidationError, ProjectNotFoundError) as exc:
-        return _tool_failure(str(exc))
-
-
-@tool(name="get_projects", description="List projects for a user with optional name/tags/tech filters")
-def get_projects_tool(
-    oid: str,
-    tag: Optional[str] = None,
-    tags: Optional[str] = None,
-    tech: Optional[str] = None,
-    techs: Optional[str] = None,
-    name: Optional[str] = None,
-) -> dict[str, Any]:
-    try:
-        items = list_projects_for_user(oid, tag=tag, tags=tags, tech=tech, techs=techs, name=name)
-        return _tool_success(items)
-    except (ProjectValidationError, ProjectNotFoundError) as exc:
-        return _tool_failure(str(exc))
-
-
-@tool(name="get_project_by_id", description="Get one project by id for a given user oid")
-def get_project_by_id_tool(oid: str, project_id: int) -> dict[str, Any]:
-    try:
-        project = get_project_for_user(oid=oid, project_id=project_id)
-        return _tool_success(project)
-    except (ProjectValidationError, ProjectNotFoundError) as exc:
-        return _tool_failure(str(exc))
-
-
-@tool(name="get_projects_by_tag", description="Get projects by tag for a given user oid")
-def get_projects_by_tag_tool(oid: str, tag: str) -> dict[str, Any]:
-    try:
-        items = get_projects_by_tag_for_user(oid=oid, tag=tag)
-        return _tool_success(items)
-    except (ProjectValidationError, ProjectNotFoundError) as exc:
-        return _tool_failure(str(exc))
-
-
-@tool(name="modify_project", description="Patch a project for a given user oid")
-def modify_project_tool(oid: str, project_id: int, updates: dict[str, Any]) -> dict[str, Any]:
-    try:
-        project = update_project_for_user(oid=oid, project_id=project_id, updates=updates)
-        return _tool_success(project)
-    except (ProjectValidationError, ProjectNotFoundError) as exc:
-        return _tool_failure(str(exc))
-
-
-@tool(name="delete_project", description="Delete a project by id for a given user oid")
-def delete_project_tool(oid: str, project_id: int) -> dict[str, Any]:
-    try:
-        delete_project_for_user(oid=oid, project_id=project_id)
-        return _tool_success({"deleted": True, "projectId": project_id})
-    except (ProjectValidationError, ProjectNotFoundError) as exc:
-        return _tool_failure(str(exc))

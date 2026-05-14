@@ -8,6 +8,7 @@ from typing import Annotated
 
 from agent_framework import tool
 from azure.storage.blob import BlobServiceClient, ContentSettings
+from tool_response import format_tool_failure
 
 
 def _required_env(name: str) -> str:
@@ -70,12 +71,14 @@ def _upload_pdf_to_blob(pdf_bytes: bytes, blob_name: str) -> str:
 
 @tool(name="generate_resume_pdf",description="Use This Tool To Generate PDF of the Resume From Latex source")
 def generate_resume_pdf(
-    latex_code: Annotated[str, "Complete valid LaTeX source for the resume document."]
+    latex_code: Annotated[str, "Complete valid LaTeX source for the resume document."] = ""
 ) -> str:
     """Compile LaTeX resume code into PDF, upload to Azure Blob, and return blob URL."""
+    tool_name = "generate_resume_pdf"
     valid, validation_error = _validate_latex_input(latex_code)
     if not valid:
-        return f"ERROR[validation]: {validation_error}"
+        error = f"validation: {validation_error}"
+        return format_tool_failure(tool_name, error)
 
     try:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -98,20 +101,34 @@ def generate_resume_pdf(
             )
             if completed.returncode != 0:
                 error_text = (completed.stderr or completed.stdout or "").strip()
-                return f"ERROR[compile]: LaTeX compilation failed. {error_text[:4000]}"
+                error = f"compile: LaTeX compilation failed. {error_text[:4000]}"
+                return format_tool_failure(
+                    tool_name,
+                    error,
+                )
 
             if not pdf_path.exists():
-                return "ERROR[compile]: Compilation succeeded but PDF was not generated."
+                error = "compile: Compilation succeeded but PDF was not generated."
+                return format_tool_failure(
+                    tool_name,
+                    error,
+                )
 
             pdf_bytes = pdf_path.read_bytes()
             if not pdf_bytes:
-                return "ERROR[compile]: Generated PDF is empty."
+                error = "compile: Generated PDF is empty."
+                return format_tool_failure(tool_name, error)
 
             blob_name = f"{uuid.uuid4()}.pdf"
             blob_url = _upload_pdf_to_blob(pdf_bytes, blob_name)
             if not blob_url:
-                return "ERROR[upload]: Blob upload completed but URL is empty."
+                error = "upload: Blob upload completed but URL is empty."
+                return format_tool_failure(
+                    tool_name,
+                    error,
+                )
 
             return blob_url
     except Exception as exc:
-        return f"ERROR[runtime]: {exc}"
+        error = f"runtime: {exc}"
+        return format_tool_failure(tool_name, error)
