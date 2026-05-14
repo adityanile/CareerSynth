@@ -14,6 +14,7 @@ import {
   InteractionStatus,
 } from "@azure/msal-browser";
 import { useMsal } from "@azure/msal-react";
+import { ProfileResourceManager } from "@/components/profile-resource-manager";
 import { entraLoginRequest, entraTokenRequest } from "@/lib/entra-auth";
 import {
   clearEntraAccessToken,
@@ -182,9 +183,12 @@ export function EntraAuthGate({ children }: { children: ReactNode }) {
         <span style={{ fontSize: "0.95rem", color: "#1f2937" }}>
           Signed in as <strong>{activeAccount?.username ?? "Entra user"}</strong>
         </span>
-        <button type="button" onClick={() => void handleSignOut()}>
-          Sign out
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <ProfileResourceManager />
+          <button type="button" onClick={() => void handleSignOut()}>
+            Sign out
+          </button>
+        </div>
       </div>
 
       {sessionState === "syncing" && (
