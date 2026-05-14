@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useMemo, useState } from "react";
 import { CopilotChat, Thread, useAgent, useThreads } from "@copilotkit/react-core/v2";
 import styles from "./multi-conversation-chat.module.css";
 
@@ -45,6 +45,28 @@ interface ResumeState {
   projects?: ProjectStateItem[];
   experiences?: ExperienceStateItem[];
   achievements?: AchievementStateItem[];
+}
+
+interface ProjectFormState {
+  name: string;
+  description: string;
+  techStack: string;
+}
+
+interface ExperienceFormState {
+  companyName: string;
+  position: string;
+  description: string;
+  startDate: string;
+  endDate: string;
+  location: string;
+}
+
+interface AchievementFormState {
+  name: string;
+  organisation: string;
+  date: string;
+  link: string;
 }
 
 function formatThreadTime(thread: Thread): string {
@@ -334,6 +356,133 @@ function ResumeStatePanel({ agentId }: { agentId: string }) {
   const experiences = normalizeArray<ExperienceStateItem>(state.experiences);
   const achievements = normalizeArray<AchievementStateItem>(state.achievements);
   const hasAnyState = projects.length > 0 || experiences.length > 0 || achievements.length > 0;
+  const [editingProjectIndex, setEditingProjectIndex] = useState<number | null>(null);
+  const [editingExperienceIndex, setEditingExperienceIndex] = useState<number | null>(null);
+  const [editingAchievementIndex, setEditingAchievementIndex] = useState<number | null>(null);
+  const [projectForm, setProjectForm] = useState<ProjectFormState>({
+    name: "",
+    description: "",
+    techStack: "",
+  });
+  const [experienceForm, setExperienceForm] = useState<ExperienceFormState>({
+    companyName: "",
+    position: "",
+    description: "",
+    startDate: "",
+    endDate: "",
+    location: "",
+  });
+  const [achievementForm, setAchievementForm] = useState<AchievementFormState>({
+    name: "",
+    organisation: "",
+    date: "",
+    link: "",
+  });
+
+  const applyStatePatch = (patch: Partial<ResumeState>) => {
+    agent.setState({
+      ...((agent.state ?? {}) as Record<string, unknown>),
+      ...patch,
+    });
+  };
+
+  const resetProjectForm = () => {
+    setEditingProjectIndex(null);
+    setProjectForm({ name: "", description: "", techStack: "" });
+  };
+
+  const resetExperienceForm = () => {
+    setEditingExperienceIndex(null);
+    setExperienceForm({
+      companyName: "",
+      position: "",
+      description: "",
+      startDate: "",
+      endDate: "",
+      location: "",
+    });
+  };
+
+  const resetAchievementForm = () => {
+    setEditingAchievementIndex(null);
+    setAchievementForm({ name: "", organisation: "", date: "", link: "" });
+  };
+
+  const submitProjectForm = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const name = projectForm.name.trim();
+    const description = projectForm.description.trim();
+    if (!name || !description) {
+      return;
+    }
+    const item: ProjectStateItem = {
+      name,
+      description,
+      techStack: splitCsv(projectForm.techStack),
+    };
+    const updatedProjects = [...projects];
+    if (editingProjectIndex === null) {
+      updatedProjects.push(item);
+    } else {
+      updatedProjects[editingProjectIndex] = item;
+    }
+    applyStatePatch({ projects: updatedProjects });
+    resetProjectForm();
+  };
+
+  const submitExperienceForm = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const companyName = experienceForm.companyName.trim();
+    const position = experienceForm.position.trim();
+    const description = experienceForm.description.trim();
+    const startDate = experienceForm.startDate.trim();
+    const location = experienceForm.location.trim();
+    const endDate = experienceForm.endDate.trim();
+    if (!companyName || !position || !description || !startDate || !location) {
+      return;
+    }
+    const item: ExperienceStateItem = {
+      companyName,
+      position,
+      description,
+      startDate,
+      endDate: endDate || null,
+      location,
+    };
+    const updatedExperiences = [...experiences];
+    if (editingExperienceIndex === null) {
+      updatedExperiences.push(item);
+    } else {
+      updatedExperiences[editingExperienceIndex] = item;
+    }
+    applyStatePatch({ experiences: updatedExperiences });
+    resetExperienceForm();
+  };
+
+  const submitAchievementForm = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const name = achievementForm.name.trim();
+    const organisation = achievementForm.organisation.trim();
+    const date = achievementForm.date.trim();
+    const link = achievementForm.link.trim();
+    if (!name || !organisation || !date || !link) {
+      return;
+    }
+    const item: AchievementStateItem = {
+      name,
+      organisation,
+      date,
+      link,
+    };
+    const updatedAchievements = [...achievements];
+    if (editingAchievementIndex === null) {
+      updatedAchievements.push(item);
+    } else {
+      updatedAchievements[editingAchievementIndex] = item;
+    }
+    applyStatePatch({ achievements: updatedAchievements });
+    resetAchievementForm();
+  };
 
   return (
     <aside className={styles.resumeStatePanel}>
@@ -348,7 +497,7 @@ function ResumeStatePanel({ agentId }: { agentId: string }) {
           count={projects.length}
           emptyLabel="No projects"
           items={projects}
-          renderItem={(item) => (
+          renderItem={(item, index) => (
             <>
               <p className={styles.payloadTitle}>
                 {item.name ?? item.projectName ?? "Untitled project"}
@@ -359,15 +508,88 @@ function ResumeStatePanel({ agentId }: { agentId: string }) {
                 values={normalizeArray<string>(item.techStack)}
                 emptyLabel="No technologies provided"
               />
+              <div className={styles.payloadActions}>
+                <button
+                  type="button"
+                  className={styles.payloadActionButton}
+                  onClick={() => {
+                    setEditingProjectIndex(index);
+                    setProjectForm({
+                      name: item.name ?? item.projectName ?? "",
+                      description: item.description ?? "",
+                      techStack: normalizeArray<string>(item.techStack).join(", "),
+                    });
+                  }}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.payloadActionButton} ${styles.deleteActionButton}`}
+                  onClick={() =>
+                    applyStatePatch({
+                      projects: projects.filter((_, projectIndex) => projectIndex !== index),
+                    })
+                  }
+                >
+                  Delete
+                </button>
+              </div>
             </>
           )}
+          footer={
+            <form className={styles.inlineForm} onSubmit={submitProjectForm}>
+              <label className={styles.inlineLabel}>
+                Project Name
+                <input
+                  className={styles.inlineInput}
+                  value={projectForm.name}
+                  onChange={(event) =>
+                    setProjectForm((current) => ({ ...current, name: event.target.value }))
+                  }
+                />
+              </label>
+              <label className={styles.inlineLabel}>
+                Description
+                <textarea
+                  className={styles.inlineTextarea}
+                  value={projectForm.description}
+                  onChange={(event) =>
+                    setProjectForm((current) => ({ ...current, description: event.target.value }))
+                  }
+                />
+              </label>
+              <label className={styles.inlineLabel}>
+                Tech Stack (comma separated)
+                <input
+                  className={styles.inlineInput}
+                  value={projectForm.techStack}
+                  onChange={(event) =>
+                    setProjectForm((current) => ({ ...current, techStack: event.target.value }))
+                  }
+                />
+              </label>
+              <div className={styles.inlineActions}>
+                <button type="submit" className={styles.inlineActionPrimary}>
+                  {editingProjectIndex === null ? "Add Project" : "Update Project"}
+                </button>
+                <button
+                  type="button"
+                  className={styles.inlineActionSecondary}
+                  onClick={resetProjectForm}
+                >
+                  Clear
+                </button>
+              </div>
+            </form>
+          }
         />
         <StateSection
           title="Experiences"
           count={experiences.length}
           emptyLabel="No experiences"
           items={experiences}
-          renderItem={(item) => (
+          renderItem={(item, index) => (
             <>
               <p className={styles.payloadTitle}>
                 {item.position ?? "Role not provided"}
@@ -383,22 +605,237 @@ function ResumeStatePanel({ agentId }: { agentId: string }) {
               />
               <PayloadField label="Location" value={item.location} />
               <PayloadField label="Description" value={item.description} />
+              <div className={styles.payloadActions}>
+                <button
+                  type="button"
+                  className={styles.payloadActionButton}
+                  onClick={() => {
+                    setEditingExperienceIndex(index);
+                    setExperienceForm({
+                      companyName: item.companyName ?? "",
+                      position: item.position ?? "",
+                      description: item.description ?? "",
+                      startDate: item.startDate ?? "",
+                      endDate: item.endDate ?? "",
+                      location: item.location ?? "",
+                    });
+                  }}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.payloadActionButton} ${styles.deleteActionButton}`}
+                  onClick={() =>
+                    applyStatePatch({
+                      experiences: experiences.filter(
+                        (_, experienceIndex) => experienceIndex !== index,
+                      ),
+                    })
+                  }
+                >
+                  Delete
+                </button>
+              </div>
             </>
           )}
+          footer={
+            <form className={styles.inlineForm} onSubmit={submitExperienceForm}>
+              <label className={styles.inlineLabel}>
+                Company
+                <input
+                  className={styles.inlineInput}
+                  value={experienceForm.companyName}
+                  onChange={(event) =>
+                    setExperienceForm((current) => ({
+                      ...current,
+                      companyName: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className={styles.inlineLabel}>
+                Position
+                <input
+                  className={styles.inlineInput}
+                  value={experienceForm.position}
+                  onChange={(event) =>
+                    setExperienceForm((current) => ({
+                      ...current,
+                      position: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className={styles.inlineLabel}>
+                Description
+                <textarea
+                  className={styles.inlineTextarea}
+                  value={experienceForm.description}
+                  onChange={(event) =>
+                    setExperienceForm((current) => ({
+                      ...current,
+                      description: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className={styles.inlineLabel}>
+                Start Date
+                <input
+                  className={styles.inlineInput}
+                  value={experienceForm.startDate}
+                  onChange={(event) =>
+                    setExperienceForm((current) => ({
+                      ...current,
+                      startDate: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className={styles.inlineLabel}>
+                End Date (optional)
+                <input
+                  className={styles.inlineInput}
+                  value={experienceForm.endDate}
+                  onChange={(event) =>
+                    setExperienceForm((current) => ({
+                      ...current,
+                      endDate: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className={styles.inlineLabel}>
+                Location
+                <input
+                  className={styles.inlineInput}
+                  value={experienceForm.location}
+                  onChange={(event) =>
+                    setExperienceForm((current) => ({
+                      ...current,
+                      location: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <div className={styles.inlineActions}>
+                <button type="submit" className={styles.inlineActionPrimary}>
+                  {editingExperienceIndex === null ? "Add Experience" : "Update Experience"}
+                </button>
+                <button
+                  type="button"
+                  className={styles.inlineActionSecondary}
+                  onClick={resetExperienceForm}
+                >
+                  Clear
+                </button>
+              </div>
+            </form>
+          }
         />
         <StateSection
           title="Achievements"
           count={achievements.length}
           emptyLabel="No achievements"
           items={achievements}
-          renderItem={(item) => (
+          renderItem={(item, index) => (
             <>
               <p className={styles.payloadTitle}>{item.name ?? "Untitled achievement"}</p>
               <PayloadField label="Organisation" value={item.organisation} />
               <PayloadField label="Date" value={item.date} />
               <PayloadField label="Link" value={item.link} />
+              <div className={styles.payloadActions}>
+                <button
+                  type="button"
+                  className={styles.payloadActionButton}
+                  onClick={() => {
+                    setEditingAchievementIndex(index);
+                    setAchievementForm({
+                      name: item.name ?? "",
+                      organisation: item.organisation ?? "",
+                      date: item.date ?? "",
+                      link: item.link ?? "",
+                    });
+                  }}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.payloadActionButton} ${styles.deleteActionButton}`}
+                  onClick={() =>
+                    applyStatePatch({
+                      achievements: achievements.filter(
+                        (_, achievementIndex) => achievementIndex !== index,
+                      ),
+                    })
+                  }
+                >
+                  Delete
+                </button>
+              </div>
             </>
           )}
+          footer={
+            <form className={styles.inlineForm} onSubmit={submitAchievementForm}>
+              <label className={styles.inlineLabel}>
+                Name
+                <input
+                  className={styles.inlineInput}
+                  value={achievementForm.name}
+                  onChange={(event) =>
+                    setAchievementForm((current) => ({ ...current, name: event.target.value }))
+                  }
+                />
+              </label>
+              <label className={styles.inlineLabel}>
+                Organisation
+                <input
+                  className={styles.inlineInput}
+                  value={achievementForm.organisation}
+                  onChange={(event) =>
+                    setAchievementForm((current) => ({
+                      ...current,
+                      organisation: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className={styles.inlineLabel}>
+                Date
+                <input
+                  className={styles.inlineInput}
+                  value={achievementForm.date}
+                  onChange={(event) =>
+                    setAchievementForm((current) => ({ ...current, date: event.target.value }))
+                  }
+                />
+              </label>
+              <label className={styles.inlineLabel}>
+                Link
+                <input
+                  className={styles.inlineInput}
+                  value={achievementForm.link}
+                  onChange={(event) =>
+                    setAchievementForm((current) => ({ ...current, link: event.target.value }))
+                  }
+                />
+              </label>
+              <div className={styles.inlineActions}>
+                <button type="submit" className={styles.inlineActionPrimary}>
+                  {editingAchievementIndex === null ? "Add Achievement" : "Update Achievement"}
+                </button>
+                <button
+                  type="button"
+                  className={styles.inlineActionSecondary}
+                  onClick={resetAchievementForm}
+                >
+                  Clear
+                </button>
+              </div>
+            </form>
+          }
         />
       </div>
     </aside>
@@ -411,6 +848,7 @@ interface StateSectionProps<TItem> {
   items: TItem[];
   emptyLabel: string;
   renderItem: (item: TItem, index: number) => JSX.Element;
+  footer?: ReactNode;
 }
 
 function StateSection<TItem>({
@@ -419,6 +857,7 @@ function StateSection<TItem>({
   items,
   emptyLabel,
   renderItem,
+  footer,
 }: StateSectionProps<TItem>) {
   const visibleItems = items.slice(0, MAX_VISIBLE_STATE_ITEMS);
   const hiddenCount = Math.max(0, count - visibleItems.length);
@@ -447,6 +886,7 @@ function StateSection<TItem>({
           )}
         </>
       )}
+      {footer}
     </article>
   );
 }
@@ -486,4 +926,11 @@ function PayloadTagList({
       </div>
     </div>
   );
+}
+
+function splitCsv(value: string): string[] {
+  return value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
 }

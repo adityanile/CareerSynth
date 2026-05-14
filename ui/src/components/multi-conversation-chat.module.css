@@ -238,23 +238,26 @@
 
 .stateGrid {
   display: grid;
-  gap: 10px;
+  gap: 14px;
   grid-template-columns: 1fr;
 }
 
 .stateCard {
   background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #dbe3ef;
   border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.05);
   min-height: 110px;
-  padding: 10px;
+  padding: 12px;
 }
 
 .stateCardHeader {
   align-items: center;
+  border-bottom: 1px solid #e5e7eb;
   display: flex;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
 }
 
 .stateCardTitle {
@@ -270,6 +273,18 @@
   font-size: 0.7rem;
   font-weight: 600;
   padding: 2px 8px;
+}
+
+.stateGrid > .stateCard:nth-child(1) {
+  border-left: 4px solid #2563eb;
+}
+
+.stateGrid > .stateCard:nth-child(2) {
+  border-left: 4px solid #0891b2;
+}
+
+.stateGrid > .stateCard:nth-child(3) {
+  border-left: 4px solid #7c3aed;
 }
 
 .payloadList {
@@ -332,6 +347,85 @@
   font-size: 0.67rem;
   font-weight: 600;
   padding: 2px 8px;
+}
+
+.payloadActions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.payloadActionButton {
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  color: #374151;
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 3px 8px;
+}
+
+.deleteActionButton {
+  color: #b91c1c;
+}
+
+.inlineForm {
+  border-top: 1px dashed #d1d5db;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.inlineLabel {
+  color: #374151;
+  display: flex;
+  flex-direction: column;
+  font-size: 0.7rem;
+  font-weight: 600;
+  gap: 4px;
+}
+
+.inlineInput,
+.inlineTextarea {
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  color: #111827;
+  font-size: 0.72rem;
+  padding: 6px 8px;
+}
+
+.inlineTextarea {
+  min-height: 58px;
+  resize: vertical;
+}
+
+.inlineActions {
+  display: flex;
+  gap: 8px;
+}
+
+.inlineActionPrimary,
+.inlineActionSecondary {
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 5px 9px;
+}
+
+.inlineActionPrimary {
+  background: #111827;
+  border: 1px solid #111827;
+  color: #ffffff;
+}
+
+.inlineActionSecondary {
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  color: #374151;
 }
 
 .stateMore {
