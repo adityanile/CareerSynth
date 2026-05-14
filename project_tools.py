@@ -54,7 +54,6 @@ def _row_to_project(row: sqlite3.Row) -> dict[str, Any]:
         "urls": json.loads(row["urls"]),
         "description": row["description"],
         "tags": json.loads(row["tags"]),
-        "summary": row["summary"],
         "createdAt": row["created_at"],
         "updatedAt": row["updated_at"],
     }
@@ -108,14 +107,12 @@ def create_project_for_user(
     urls: list[str],
     description: str,
     tags: list[str],
-    summary: str,
 ) -> dict[str, Any]:
     normalized_name = name.strip()
     normalized_description = description.strip()
-    normalized_summary = summary.strip()
 
-    if not normalized_name or not normalized_description or not normalized_summary:
-        raise ProjectValidationError("name, description and summary are required")
+    if not normalized_name or not normalized_description:
+        raise ProjectValidationError("name and description are required")
 
     normalized_tech_stack = _normalize_string_list(tech_stack, "techStack")
     normalized_urls = _normalize_string_list(urls, "urls")
@@ -124,8 +121,8 @@ def create_project_for_user(
     with _get_db_connection() as conn:
         cursor = conn.execute(
             """
-            INSERT INTO projects (oid, name, tech_stack, urls, description, tags, summary)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO projects (oid, name, tech_stack, urls, description, tags)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 oid,
@@ -134,7 +131,6 @@ def create_project_for_user(
                 json.dumps(normalized_urls),
                 normalized_description,
                 json.dumps(normalized_tags),
-                normalized_summary,
             ),
         )
         project_id = cursor.lastrowid
@@ -196,13 +192,6 @@ def update_project_for_user(oid: str, project_id: int, updates: dict[str, Any]) 
         if not value:
             raise ProjectValidationError("description cannot be empty")
         set_clauses.append("description = ?")
-        params.append(value)
-
-    if "summary" in updates:
-        value = (updates["summary"] or "").strip()
-        if not value:
-            raise ProjectValidationError("summary cannot be empty")
-        set_clauses.append("summary = ?")
         params.append(value)
 
     if "techStack" in updates:

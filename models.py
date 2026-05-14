@@ -9,7 +9,6 @@ class ProjectCreate(BaseModel):
     urls: list[str] = Field(default_factory=list)
     description: str
     tags: list[str] = Field(default_factory=list)
-    summary: str
 
 
 class ProjectPatch(BaseModel):
@@ -18,7 +17,6 @@ class ProjectPatch(BaseModel):
     urls: Optional[list[str]] = None
     description: Optional[str] = None
     tags: Optional[list[str]] = None
-    summary: Optional[str] = None
 
 
 class ExperienceCreate(BaseModel):

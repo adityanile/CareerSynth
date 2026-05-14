@@ -1,7 +1,6 @@
 import os
 import sqlite3
 from collections.abc import AsyncGenerator
-from datetime import datetime
 from typing import Any, Optional
 
 from dotenv import load_dotenv
@@ -65,149 +64,45 @@ client = OpenAIChatCompletionClient(
     api_key=os.getenv("AZURE_OPENAI_API_KEY"),
 )
 
-coordinator_instructions = """
-You are the main CareerSynth coordinator agent.
+main_agent_instructions = """
+You are the main CareerSynth agent.
 
-Project delegation rules:
-- For any project-related request, use the `project_manager` tool (project manager agent tool).
-- Do not handle project operations directly in the coordinator.
-- If the user wants to create/add/save a project, delegate to `project_manager` with all project details.
-- Never ask the user for `oid` for project operations. It is injected from request context.
-- Do not claim a project operation succeeded unless the delegated tool call succeeds.
+Tool usage rules:
+- Handle project operations directly with `create_project`.
+- Handle experience operations directly with `create_experience`.
+- Handle achievement operations directly with `create_achievement`.
+- Never ask the user for `oid` for these operations. It is injected from authenticated request context.
+- Do not claim an operation succeeded unless the corresponding tool call succeeds.
 
-Experience delegation rules:
-- For any experience-related request, use the `experience_manager` tool.
-- Do not handle experience operations directly in the coordinator.
-- If the user wants to create/add/save experience, delegate to `experience_manager` with all details.
-- Never ask the user for `oid` for experience operations. It is injected from request context.
-- Do not claim an experience operation succeeded unless the delegated tool call succeeds.
+Required fields before create tool calls:
+- `create_project`: `name`, `description`, `tech_stack`, `urls`, `tags`
+- `create_experience`: `company_name`, `position`, `start_date`, `end_date` (nullable), `description`, `location`
+- `create_achievement`: `name`, `link`, `organisation`, `date`
+- If required fields are missing or ambiguous, ask only for those missing/ambiguous fields.
 
-Achievement delegation rules:
-- For any achievement-related request, use the `achievement_manager` tool.
-- Do not handle achievement operations directly in the coordinator.
-- If the user wants to create/add/save an achievement, delegate to `achievement_manager` with all details.
-- Never ask the user for `oid` for achievement operations. It is injected from request context.
-- Do not claim an achievement operation succeeded unless the delegated tool call succeeds.
-
-General behavior:
+Resume behavior:
 - For resume drafting, refinement, LaTeX generation, and PDF generation, use `generate_resume_pdf` when needed.
+- For `generate_resume_pdf`, pass full final LaTeX source and any explicit user constraints already requested.
+
+Response behavior:
 - Keep user-facing responses concise and execution-focused.
-
-Coordination behavior:
-- Ask clarifying questions only when required input is missing.
-- After tool completion, summarize result and confirm next action.
+- After tool completion, summarize the result and confirm next action.
 - If the current user request is fully done, end your final response with exactly: Task complete.
-"""
-
-project_manager_instructions = """
-You are the CareerSynth project manager agent.
-
-Project tool rules:
-- When the user asks to create/add/save a project, you must use the `create_project` tool.
-- Never ask the user for `oid`. It is injected from the authenticated request context.
-- Before calling `create_project`, collect all required fields: `name`, `tech_stack`, `urls`, `description`, `tags`, `summary`.
-- Do not claim a project was created unless the tool call succeeds.
-- Do not invent project records; creation must go through the tool.
-
-General behavior:
-- Focus only on project-related requests.
-- Ask clarifying questions only when required project fields are missing.
-- After tool completion, summarize the project result clearly.
-"""
-
-experience_manager_instructions = """
-You are the CareerSynth experience manager agent.
-
-Experience tool rules:
-- When the user asks to create/add/save experience, you must use the `create_experience` tool.
-- Never ask the user for `oid`. It is injected from the authenticated request context.
-- Before calling `create_experience`, collect all required fields: `company_name`, `start_date`, `end_date` (nullable), `position`, `description`, `location`.
-- Do not claim experience was created unless the tool call succeeds.
-- Do not invent experience records; creation must go through the tool.
-
-General behavior:
-- Focus only on experience-related requests.
-- Ask clarifying questions only when required experience fields are missing.
-- After tool completion, summarize the experience result clearly.
-"""
-
-achievement_manager_instructions = """
-You are the CareerSynth achievement manager agent.
-
-Achievement tool rules:
-- When the user asks to create/add/save an achievement, you must use the `create_achievement` tool.
-- Never ask the user for `oid`. It is injected from the authenticated request context.
-- Before calling `create_achievement`, collect all required fields: `name`, `link`, `organisation`, `date`.
-- Do not claim an achievement was created unless the tool call succeeds.
-- Do not invent achievement records; creation must go through the tool.
-
-General behavior:
-- Focus only on achievement-related requests.
-- Ask clarifying questions only when required achievement fields are missing.
-- After tool completion, summarize the achievement result clearly.
 """
 
 app = FastAPI(title="AG-UI Server")
 
 
-project_manager_agent = Agent(
-    client=client,
-    instructions=project_manager_instructions,
-    name="project-manager",
-    middleware=[ToolCallSequenceRepairMiddleware()],
-    tools=[create_project_from_context_tool],
-)
-
-project_manager_tool = project_manager_agent.as_tool(
-    name="project_manager",
-    description="Handle project-related operations and create projects.",
-    arg_name="query",
-    arg_description="The project operation request",
-    propagate_session=True,
-)
-
-experience_manager_agent = Agent(
-    client=client,
-    instructions=experience_manager_instructions,
-    name="experience-manager",
-    middleware=[ToolCallSequenceRepairMiddleware()],
-    tools=[create_experience_from_context_tool],
-)
-
-experience_manager_tool = experience_manager_agent.as_tool(
-    name="experience_manager",
-    description="Handle experience-related operations and create experiences.",
-    arg_name="query",
-    arg_description="The experience operation request",
-    propagate_session=True,
-)
-
-achievement_manager_agent = Agent(
-    client=client,
-    instructions=achievement_manager_instructions,
-    name="achievement-manager",
-    middleware=[ToolCallSequenceRepairMiddleware()],
-    tools=[create_achievement_from_context_tool],
-)
-
-achievement_manager_tool = achievement_manager_agent.as_tool(
-    name="achievement_manager",
-    description="Handle achievement-related operations and create achievements.",
-    arg_name="query",
-    arg_description="The achievement operation request",
-    propagate_session=True,
-)
-
 agent = Agent(
     client=client,
-    instructions=coordinator_instructions,
+    instructions=main_agent_instructions,
     name="main",
     middleware=[ToolCallSequenceRepairMiddleware()],
     tools=[
         generate_resume_pdf,
-        project_manager_tool,
-        experience_manager_tool,
-        achievement_manager_tool,
+        create_project_from_context_tool,
+        create_experience_from_context_tool,
+        create_achievement_from_context_tool,
     ],
 )
 
@@ -231,27 +126,6 @@ add_agent_framework_fastapi_endpoint(
     dependencies=[Depends(agui_auth_context)],
 )
 
-add_agent_framework_fastapi_endpoint(
-    app,
-    project_manager_agent,
-    "/project-manager",
-    dependencies=[Depends(agui_auth_context)],
-)
-
-add_agent_framework_fastapi_endpoint(
-    app,
-    experience_manager_agent,
-    "/experience-manager",
-    dependencies=[Depends(agui_auth_context)],
-)
-
-add_agent_framework_fastapi_endpoint(
-    app,
-    achievement_manager_agent,
-    "/achievement-manager",
-    dependencies=[Depends(agui_auth_context)],
-)
-
 
 def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
@@ -271,7 +145,6 @@ def init_db() -> None:
                 urls TEXT NOT NULL DEFAULT '[]',
                 description TEXT NOT NULL,
                 tags TEXT NOT NULL DEFAULT '[]',
-                summary TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
@@ -310,7 +183,6 @@ def init_db() -> None:
             """
         )
 
-
 @app.on_event("startup")
 def on_startup() -> None:
     init_db()
@@ -324,7 +196,7 @@ def model_to_partial_dict(model: Any) -> dict[str, Any]:
     return model.dict(exclude_unset=True)
 
 
-def validate_ddmmyyyy(value: Optional[str], field_name: str, allow_null: bool = False) -> None:
+def validate_date_text(value: Optional[str], field_name: str, allow_null: bool = False) -> None:
     if value is None and allow_null:
         return
     if allow_null and isinstance(value, str) and not value.strip():
@@ -332,13 +204,8 @@ def validate_ddmmyyyy(value: Optional[str], field_name: str, allow_null: bool = 
     if value is None:
         raise HTTPException(status_code=400, detail=f"{field_name} is required")
     normalized_value = value.strip()
-    for fmt in ("%d-%m-%Y", "%Y-%m-%d"):
-        try:
-            datetime.strptime(normalized_value, fmt)
-            return
-        except ValueError:
-            continue
-    raise HTTPException(status_code=400, detail=f"{field_name} must be in DD-MM-YYYY or YYYY-MM-DD format")
+    if not normalized_value:
+        raise HTTPException(status_code=400, detail=f"{field_name} is required")
 
 
 def get_oid_or_401(request: Request) -> str:
@@ -421,7 +288,6 @@ async def create_project(request: Request, payload: ProjectCreate) -> dict[str, 
             urls=payload.urls,
             description=payload.description,
             tags=payload.tags,
-            summary=payload.summary,
         )
     except ProjectValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -596,12 +462,12 @@ async def patch_experience(
         params.append(value)
 
     if "startDate" in updates:
-        validate_ddmmyyyy(updates["startDate"], "startDate")
+        validate_date_text(updates["startDate"], "startDate")
         set_clauses.append("start_date = ?")
         params.append(updates["startDate"])
 
     if "endDate" in updates:
-        validate_ddmmyyyy(updates["endDate"], "endDate", allow_null=True)
+        validate_date_text(updates["endDate"], "endDate", allow_null=True)
         set_clauses.append("end_date = ?")
         params.append(updates["endDate"])
 
@@ -790,7 +656,7 @@ async def patch_achievement(
         params.append(value)
 
     if "date" in updates:
-        validate_ddmmyyyy(updates["date"], "date")
+        validate_date_text(updates["date"], "date")
         set_clauses.append("date = ?")
         params.append(updates["date"])
 

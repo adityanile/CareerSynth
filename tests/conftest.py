@@ -15,6 +15,21 @@ def _install_stub_modules(monkeypatch: pytest.MonkeyPatch) -> None:
             self.args = args
             self.kwargs = kwargs
 
+    class ChatContext:
+        def __init__(self):
+            self.messages = []
+
+    class ChatMiddleware:
+        async def process(self, context, call_next):
+            await call_next()
+
+    class Message:
+        def __init__(self, role=None, contents=None):
+            self.role = role
+            self.contents = contents or []
+            self.message_id = None
+            self.additional_properties = {}
+
     def tool(fn=None, **kwargs):
         if fn is None:
             def _decorator(inner_fn):
@@ -24,6 +39,9 @@ def _install_stub_modules(monkeypatch: pytest.MonkeyPatch) -> None:
         return fn
 
     agent_framework.Agent = DummyAgent
+    agent_framework.ChatContext = ChatContext
+    agent_framework.ChatMiddleware = ChatMiddleware
+    agent_framework.Message = Message
     agent_framework.tool = tool
 
     agent_framework_openai = types.ModuleType("agent_framework.openai")
@@ -34,6 +52,14 @@ def _install_stub_modules(monkeypatch: pytest.MonkeyPatch) -> None:
             self.kwargs = kwargs
 
     agent_framework_openai.OpenAIChatClient = DummyOpenAIChatClient
+    agent_framework_openai.OpenAIChatCompletionClient = DummyOpenAIChatClient
+
+    agent_framework_ag_ui_submodule = types.ModuleType("agent_framework.ag_ui")
+
+    def add_agent_framework_fastapi_endpoint_submodule(app, agent, route, dependencies=None):
+        return None
+
+    agent_framework_ag_ui_submodule.add_agent_framework_fastapi_endpoint = add_agent_framework_fastapi_endpoint_submodule
 
     agent_framework_ag_ui = types.ModuleType("agent_framework_ag_ui")
 
@@ -75,6 +101,7 @@ def _install_stub_modules(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setitem(sys.modules, "agent_framework", agent_framework)
     monkeypatch.setitem(sys.modules, "agent_framework.openai", agent_framework_openai)
+    monkeypatch.setitem(sys.modules, "agent_framework.ag_ui", agent_framework_ag_ui_submodule)
     monkeypatch.setitem(sys.modules, "agent_framework_ag_ui", agent_framework_ag_ui)
     monkeypatch.setitem(sys.modules, "fastapi_microsoft_identity", fastapi_microsoft_identity)
 

@@ -41,7 +41,6 @@ def create_project_from_context_tool(
     urls: list[str] | str | None = None,
     description: str = "",
     tags: list[str] | str | None = None,
-    summary: str = "",
     techStack: list[str] | str | None = None,
     **kwargs: Any,
 ) -> dict[str, Any] | str:
@@ -51,7 +50,6 @@ def create_project_from_context_tool(
         resolved_urls = urls if urls is not None else kwargs.get("url")
         resolved_tags = tags if tags is not None else kwargs.get("tag")
         resolved_description = description or str(kwargs.get("details", ""))
-        resolved_summary = summary or str(kwargs.get("overview", ""))
         oid = require_current_oid()
         project = create_project_for_user(
             oid=oid,
@@ -60,7 +58,6 @@ def create_project_from_context_tool(
             urls=_coerce_string_list(resolved_urls),
             description=resolved_description,
             tags=_coerce_string_list(resolved_tags),
-            summary=resolved_summary,
         )
         return _tool_success(project)
     except Exception as exc:

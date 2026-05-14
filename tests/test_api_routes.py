@@ -5,7 +5,6 @@ def test_projects_crud_and_filters(client, oid_headers):
         "urls": ["https://example.com/project-1"],
         "description": "desc",
         "tags": ["backend", "api"],
-        "summary": "summary",
     }
 
     res = client.post("/api/projects", json=create_payload, headers=oid_headers("user-1"))
@@ -35,11 +34,11 @@ def test_projects_crud_and_filters(client, oid_headers):
 
     patch_res = client.patch(
         f"/api/projects/{project_id}",
-        json={"summary": "updated", "tags": ["backend", "updated"]},
+        json={"description": "updated", "tags": ["backend", "updated"]},
         headers=oid_headers("user-1"),
     )
     assert patch_res.status_code == 200
-    assert patch_res.json()["summary"] == "updated"
+    assert patch_res.json()["description"] == "updated"
     assert patch_res.json()["tags"] == ["backend", "updated"]
 
     res = client.delete(f"/api/projects/{project_id}", headers=oid_headers("user-1"))
@@ -56,7 +55,6 @@ def test_projects_are_isolated_by_oid(client, oid_headers):
         "urls": [],
         "description": "desc",
         "tags": ["private"],
-        "summary": "summary",
     }
     create_res = client.post("/api/projects", json=payload, headers=oid_headers("user-a"))
     assert create_res.status_code == 201
@@ -117,18 +115,18 @@ def test_experiences_crud_and_filters(client, oid_headers):
     assert missing_res.status_code == 404
 
 
-def test_experience_date_validation(client, oid_headers):
-    bad_payload = {
+def test_experience_date_accepts_freeform_string(client, oid_headers):
+    payload = {
         "companyName": "Acme",
-        "startDate": "2024-01-10",
+        "startDate": "Jan 2024 to Present",
         "endDate": None,
         "position": "Engineer",
         "description": "desc",
         "location": "BLR",
     }
-    res = client.post("/api/experiences", json=bad_payload, headers=oid_headers("user-1"))
-    assert res.status_code == 400
-    assert "DD-MM-YYYY" in res.json()["detail"]
+    res = client.post("/api/experiences", json=payload, headers=oid_headers("user-1"))
+    assert res.status_code == 201
+    assert res.json()["startDate"] == "Jan 2024 to Present"
 
 
 def test_achievements_crud_and_filters(client, oid_headers):
@@ -177,16 +175,16 @@ def test_achievements_crud_and_filters(client, oid_headers):
     assert missing_res.status_code == 404
 
 
-def test_achievement_date_validation(client, oid_headers):
-    bad_payload = {
+def test_achievement_date_accepts_freeform_string(client, oid_headers):
+    payload = {
         "name": "Award",
         "link": "https://example.com",
         "organisation": "Org",
-        "date": "2025-02-01",
+        "date": "Spring 2025",
     }
-    res = client.post("/api/achievements", json=bad_payload, headers=oid_headers("user-1"))
-    assert res.status_code == 400
-    assert "DD-MM-YYYY" in res.json()["detail"]
+    res = client.post("/api/achievements", json=payload, headers=oid_headers("user-1"))
+    assert res.status_code == 201
+    assert res.json()["date"] == "Spring 2025"
 
 
 def test_missing_oid_claim_returns_401(client):

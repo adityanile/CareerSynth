@@ -120,8 +120,7 @@ Achievement-specific filters:
   "techStack": ["FastAPI", "SQLite", "Next.js"],
   "urls": ["https://example.com"],
   "description": "Resume platform backend",
-  "tags": ["backend", "api"],
-  "summary": "Built a secure multi-tenant CRUD API"
+  "tags": ["backend", "api"]
 }
 ```
 
@@ -147,8 +146,8 @@ Achievement-specific filters:
 }
 ```
 
-Date format validation:
-- `startDate`, `endDate`, and `date` must use `DD-MM-YYYY`.
+Date field behavior:
+- `startDate`, `endDate`, and `date` are stored as user-provided strings.
 - `endDate` can be `null` for ongoing roles.
 
 ## Local Backend Setup

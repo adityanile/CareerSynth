@@ -1,5 +1,4 @@
 import sqlite3
-from datetime import datetime
 from typing import Any, Optional
 
 
@@ -30,13 +29,9 @@ def _normalize_date(value: Optional[str], field_name: str, allow_null: bool = Fa
         raise ProfileValidationError(f"{field_name} is required")
 
     normalized_value = value.strip()
-    for fmt in ("%d-%m-%Y", "%Y-%m-%d"):
-        try:
-            parsed = datetime.strptime(normalized_value, fmt)
-            return parsed.strftime("%d-%m-%Y")
-        except ValueError:
-            continue
-    raise ProfileValidationError(f"{field_name} must be in DD-MM-YYYY or YYYY-MM-DD format")
+    if not normalized_value:
+        raise ProfileValidationError(f"{field_name} is required")
+    return normalized_value
 
 
 def _row_to_experience(row: sqlite3.Row) -> dict[str, Any]:
