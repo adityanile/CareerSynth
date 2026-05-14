@@ -3,6 +3,45 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+class ProjectState(BaseModel):
+    id: int
+    name: str
+    techStack: list[str] = Field(default_factory=list)
+    urls: list[str] = Field(default_factory=list)
+    description: str
+    tags: list[str] = Field(default_factory=list)
+    createdAt: str
+    updatedAt: str
+
+
+class ExperienceState(BaseModel):
+    id: int
+    companyName: str
+    startDate: str
+    endDate: Optional[str] = None
+    position: str
+    description: str
+    location: str
+    createdAt: str
+    updatedAt: str
+
+
+class AchievementState(BaseModel):
+    id: int
+    name: str
+    link: str
+    organisation: str
+    date: str
+    createdAt: str
+    updatedAt: str
+
+
+class ResumeState(BaseModel):
+    projects: list[ProjectState] = Field(default_factory=list)
+    experiences: list[ExperienceState] = Field(default_factory=list)
+    achievements: list[AchievementState] = Field(default_factory=list)
+
+
 class ProjectCreate(BaseModel):
     name: str
     techStack: list[str] = Field(default_factory=list)

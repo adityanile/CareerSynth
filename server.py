@@ -6,7 +6,7 @@ from typing import Any, Optional
 from dotenv import load_dotenv
 from agent_framework import Agent
 from agent_framework.openai import OpenAIChatCompletionClient
-from agent_framework.ag_ui import add_agent_framework_fastapi_endpoint
+from agent_framework.ag_ui import AgentFrameworkAgent, add_agent_framework_fastapi_endpoint
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi_microsoft_identity import AuthError, initialize, requires_auth, validate_scope
 
@@ -25,6 +25,7 @@ from models import (
     ExperiencePatch,
     ProjectCreate,
     ProjectPatch,
+    ResumeState,
 )
 from project_tools import (
     ProjectNotFoundError,
@@ -44,6 +45,11 @@ from profile_tools import (
     create_experience_for_user,
     list_achievements_for_user,
     list_experiences_for_user,
+)
+from resume_state_tools import (
+    add_achievement_to_resume_tool,
+    add_experience_to_resume_tool,
+    add_project_to_resume_tool,
 )
 from resume_pdf_tool import generate_resume_pdf
 from tool_call_sequence_middleware import ToolCallSequenceRepairMiddleware
@@ -72,16 +78,28 @@ main_agent_instructions = """
 You are the main CareerSynth agent.
 
 Tool usage rules:
-- Handle project operations directly with `create_project`.
-- Handle project queries directly with `query_projects`.
-- Handle experience operations directly with `create_experience`.
-- Handle experience queries directly with `query_experiences`.
-- Handle achievement operations directly with `create_achievement`.
-- Handle achievement queries directly with `query_achievements`.
+- Intent routing is strict and mutually exclusive:
+- If the user explicitly says "add to resume", "put in resume", "include in resume", or "save to resume", use only the matching resume-state tool:
+  - `add_project_to_resume`
+  - `add_experience_to_resume`
+  - `add_achievement_to_resume`
+- If the user explicitly says "create", "save", "store", or "add" for project/experience/achievement in system/database terms (and does not say resume), use only the matching create tool:
+  - `create_project`
+  - `create_experience`
+  - `create_achievement`
+- Never use a create tool when the user explicitly requested resume.
+- Never use a resume-state add tool when the user explicitly requested create/save/store in system/database terms.
+- If both intents appear in the same request, ask a single clarification question before calling tools.
+- Handle project queries with `query_projects`.
+- Handle experience queries with `query_experiences`.
+- Handle achievement queries with `query_achievements`.
 - Never ask the user for `oid` for these operations. It is injected from authenticated request context.
 - Do not claim an operation succeeded unless the corresponding tool call succeeds.
 
 Required fields before create tool calls:
+- `add_project_to_resume`: `project` with `projectName`, `description`, `techStack`
+- `add_experience_to_resume`: `experience` with `companyName`, `position`, `description`, `startDate`, `location` (optional `endDate`)
+- `add_achievement_to_resume`: `achievement` with `name`, `organisation`, `date`, `link`
 - `create_project`: `name`, `description`, `tech_stack`, `urls`, `tags`
 - `create_experience`: `company_name`, `position`, `start_date`, `end_date` (nullable), `description`, `location`
 - `create_achievement`: `name`, `link`, `organisation`, `date`
@@ -98,6 +116,8 @@ Response behavior:
 """
 
 app = FastAPI(title="AG-UI Server")
+_default_resume_state_model = ResumeState()
+DEFAULT_RESUME_STATE = _default_resume_state_model.model_dump()
 
 
 agent = Agent(
@@ -107,6 +127,9 @@ agent = Agent(
     middleware=[ToolCallSequenceRepairMiddleware()],
     tools=[
         generate_resume_pdf,
+        add_project_to_resume_tool,
+        add_experience_to_resume_tool,
+        add_achievement_to_resume_tool,
         create_project_from_context_tool,
         query_projects_from_context_tool,
         create_experience_from_context_tool,
@@ -114,6 +137,46 @@ agent = Agent(
         create_achievement_from_context_tool,
         query_achievements_from_context_tool,
     ],
+)
+
+PREDICTED_STATE_CONFIG: dict[str, dict[str, str | None]] = {
+    "projects": {
+        "tool": "add_project_to_resume",
+        "tool_argument": "project",
+    },
+    "experiences": {
+        "tool": "add_experience_to_resume",
+        "tool_argument": "experience",
+    },
+    "achievements": {
+        "tool": "add_achievement_to_resume",
+        "tool_argument": "achievement",
+    },
+}
+
+agui_agent = AgentFrameworkAgent(
+    agent=agent,
+    name="CareerSynthAgent",
+    description="Maintains and streams the user's resume state snapshot",
+    state_schema={
+        "projects": {
+            "type": "array",
+            "description": "Current list of resume projects",
+            "items": {"type": "object"},
+        },
+        "experiences": {
+            "type": "array",
+            "description": "Current list of resume experiences",
+            "items": {"type": "object"},
+        },
+        "achievements": {
+            "type": "array",
+            "description": "Current list of resume achievements",
+            "items": {"type": "object"},
+        },
+    },
+    predict_state_config=PREDICTED_STATE_CONFIG,
+    require_confirmation=False,
 )
 
 async def agui_auth_context(request: Request) -> AsyncGenerator[None, None]:
@@ -131,8 +194,9 @@ async def agui_auth_context(request: Request) -> AsyncGenerator[None, None]:
 
 add_agent_framework_fastapi_endpoint(
     app,
-    agent,
+    agui_agent,
     "/",
+    default_state=DEFAULT_RESUME_STATE,
     dependencies=[Depends(agui_auth_context)],
 )
 

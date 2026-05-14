@@ -1,10 +1,51 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { CopilotChat, Thread, useThreads } from "@copilotkit/react-core/v2";
+import { CopilotChat, Thread, useAgent, useThreads } from "@copilotkit/react-core/v2";
 import styles from "./multi-conversation-chat.module.css";
 
 const THREAD_PAGE_SIZE = 25;
+const MAX_VISIBLE_STATE_ITEMS = 5;
+
+interface ProjectStateItem {
+  id?: number;
+  name?: string;
+  projectName?: string;
+  techStack?: string[];
+  urls?: string[];
+  description?: string;
+  tags?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+interface ExperienceStateItem {
+  id?: number;
+  companyName?: string;
+  startDate?: string;
+  endDate?: string | null;
+  position?: string;
+  description?: string;
+  location?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+interface AchievementStateItem {
+  id?: number;
+  name?: string;
+  link?: string;
+  organisation?: string;
+  date?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+interface ResumeState {
+  projects?: ProjectStateItem[];
+  experiences?: ExperienceStateItem[];
+  achievements?: AchievementStateItem[];
+}
 
 function formatThreadTime(thread: Thread): string {
   const iso = thread.lastRunAt ?? thread.updatedAt;
@@ -46,13 +87,16 @@ function SingleSessionChat({ agentId }: { agentId: string }) {
         </p>
       </header>
       <div className={styles.chatBody}>
-        <CopilotChat
-          agentId={agentId}
-          chatView={styles.chatView}
-          labels={{
-            chatInputPlaceholder: "Ask your agent anything...",
-          }}
-        />
+        <div className={styles.chatWorkspace}>
+          <ResumeStatePanel agentId={agentId} />
+          <CopilotChat
+            agentId={agentId}
+            chatView={styles.chatView}
+            labels={{
+              chatInputPlaceholder: "Ask your agent anything...",
+            }}
+          />
+        </div>
       </div>
     </main>
   );
@@ -262,16 +306,184 @@ function MultiSessionChat({ agentId }: { agentId: string }) {
           <h2>{activeThread?.name ?? "New conversation"}</h2>
         </header>
         <div className={styles.chatBody}>
-          <CopilotChat
-            agentId={agentId}
-            threadId={activeThreadId}
-            chatView={styles.chatView}
-            labels={{
-              chatInputPlaceholder: "Ask your agent anything...",
-            }}
-          />
+          <div className={styles.chatWorkspace}>
+            <ResumeStatePanel agentId={agentId} />
+            <CopilotChat
+              agentId={agentId}
+              threadId={activeThreadId}
+              chatView={styles.chatView}
+              labels={{
+                chatInputPlaceholder: "Ask your agent anything...",
+              }}
+            />
+          </div>
         </div>
       </main>
+    </div>
+  );
+}
+
+function normalizeArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function ResumeStatePanel({ agentId }: { agentId: string }) {
+  const { agent } = useAgent({ agentId });
+  const state = (agent.state ?? {}) as ResumeState;
+  const projects = normalizeArray<ProjectStateItem>(state.projects);
+  const experiences = normalizeArray<ExperienceStateItem>(state.experiences);
+  const achievements = normalizeArray<AchievementStateItem>(state.achievements);
+  const hasAnyState = projects.length > 0 || experiences.length > 0 || achievements.length > 0;
+
+  return (
+    <aside className={styles.resumeStatePanel}>
+      <div className={styles.resumeStateHeader}>
+        <h3>Shared Resume State</h3>
+        {!hasAnyState && <span className={styles.stateHint}>No snapshot loaded yet.</span>}
+      </div>
+
+      <div className={styles.stateGrid}>
+        <StateSection
+          title="Projects"
+          count={projects.length}
+          emptyLabel="No projects"
+          items={projects}
+          renderItem={(item) => (
+            <>
+              <p className={styles.payloadTitle}>
+                {item.name ?? item.projectName ?? "Untitled project"}
+              </p>
+              <PayloadField label="Description" value={item.description} />
+              <PayloadTagList
+                label="Tech Stack"
+                values={normalizeArray<string>(item.techStack)}
+                emptyLabel="No technologies provided"
+              />
+            </>
+          )}
+        />
+        <StateSection
+          title="Experiences"
+          count={experiences.length}
+          emptyLabel="No experiences"
+          items={experiences}
+          renderItem={(item) => (
+            <>
+              <p className={styles.payloadTitle}>
+                {item.position ?? "Role not provided"}
+              </p>
+              <PayloadField label="Company" value={item.companyName} />
+              <PayloadField
+                label="Dates"
+                value={
+                  item.startDate
+                    ? `${item.startDate} - ${item.endDate ?? "Present"}`
+                    : undefined
+                }
+              />
+              <PayloadField label="Location" value={item.location} />
+              <PayloadField label="Description" value={item.description} />
+            </>
+          )}
+        />
+        <StateSection
+          title="Achievements"
+          count={achievements.length}
+          emptyLabel="No achievements"
+          items={achievements}
+          renderItem={(item) => (
+            <>
+              <p className={styles.payloadTitle}>{item.name ?? "Untitled achievement"}</p>
+              <PayloadField label="Organisation" value={item.organisation} />
+              <PayloadField label="Date" value={item.date} />
+              <PayloadField label="Link" value={item.link} />
+            </>
+          )}
+        />
+      </div>
+    </aside>
+  );
+}
+
+interface StateSectionProps<TItem> {
+  title: string;
+  count: number;
+  items: TItem[];
+  emptyLabel: string;
+  renderItem: (item: TItem, index: number) => JSX.Element;
+}
+
+function StateSection<TItem>({
+  title,
+  count,
+  items,
+  emptyLabel,
+  renderItem,
+}: StateSectionProps<TItem>) {
+  const visibleItems = items.slice(0, MAX_VISIBLE_STATE_ITEMS);
+  const hiddenCount = Math.max(0, count - visibleItems.length);
+
+  return (
+    <article className={styles.stateCard}>
+      <header className={styles.stateCardHeader}>
+        <span className={styles.stateCardTitle}>{title}</span>
+        <span className={styles.stateCardCount}>{count}</span>
+      </header>
+      {visibleItems.length === 0 ? (
+        <p className={styles.stateEmpty}>{emptyLabel}</p>
+      ) : (
+        <>
+          <ul className={styles.payloadList}>
+            {visibleItems.map((item, index) => (
+              <li key={`${title}-${index}`} className={styles.payloadItem}>
+                {renderItem(item, index)}
+              </li>
+            ))}
+          </ul>
+          {hiddenCount > 0 && (
+            <p className={styles.stateMore}>
+              +{hiddenCount} more
+            </p>
+          )}
+        </>
+      )}
+    </article>
+  );
+}
+
+function PayloadField({ label, value }: { label: string; value: string | undefined | null }) {
+  const normalizedValue = value?.trim();
+  return (
+    <p className={styles.payloadLine}>
+      <span className={styles.payloadLabel}>{label}:</span>{" "}
+      <span className={styles.payloadValue}>{normalizedValue || "Not provided"}</span>
+    </p>
+  );
+}
+
+function PayloadTagList({
+  label,
+  values,
+  emptyLabel,
+}: {
+  label: string;
+  values: string[];
+  emptyLabel: string;
+}) {
+  if (values.length === 0) {
+    return <PayloadField label={label} value={emptyLabel} />;
+  }
+
+  return (
+    <div className={styles.payloadTagsWrap}>
+      <span className={styles.payloadLabel}>{label}:</span>
+      <div className={styles.payloadTags}>
+        {values.map((value, index) => (
+          <span key={`${label}-${value}-${index}`} className={styles.payloadTag}>
+            {value}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

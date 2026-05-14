@@ -56,17 +56,29 @@ def _install_stub_modules(monkeypatch: pytest.MonkeyPatch) -> None:
 
     agent_framework_ag_ui_submodule = types.ModuleType("agent_framework.ag_ui")
 
-    def add_agent_framework_fastapi_endpoint_submodule(app, agent, route, dependencies=None):
+    class DummyAgentFrameworkAgent:
+        def __init__(self, agent=None, **kwargs):
+            self.agent = agent
+            self.kwargs = kwargs
+
+    def add_agent_framework_fastapi_endpoint_submodule(app, agent, route, dependencies=None, **kwargs):
         return None
 
+    agent_framework_ag_ui_submodule.AgentFrameworkAgent = DummyAgentFrameworkAgent
     agent_framework_ag_ui_submodule.add_agent_framework_fastapi_endpoint = add_agent_framework_fastapi_endpoint_submodule
+    agent_framework_ag_ui_submodule.state_update = lambda text="", state=None, tool_result=None: {
+        "text": text,
+        "state": state,
+        "tool_result": tool_result,
+    }
 
     agent_framework_ag_ui = types.ModuleType("agent_framework_ag_ui")
 
-    def add_agent_framework_fastapi_endpoint(app, agent, route):
+    def add_agent_framework_fastapi_endpoint(app, agent, route, **kwargs):
         return None
 
     agent_framework_ag_ui.add_agent_framework_fastapi_endpoint = add_agent_framework_fastapi_endpoint
+    agent_framework_ag_ui.AgentFrameworkAgent = DummyAgentFrameworkAgent
 
     fastapi_microsoft_identity = types.ModuleType("fastapi_microsoft_identity")
 
