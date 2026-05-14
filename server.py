@@ -68,20 +68,26 @@ client = OpenAIChatCompletionClient(
 coordinator_instructions = """
 You are the main CareerSynth coordinator agent.
 
-Project tool rules:
-- When the user asks to create/add/save a project, you must use the `create_project` tool.
-- Never ask the user for `oid`. It is injected from the authenticated request context.
-- Before calling `create_project`, collect all required fields: `name`, `tech_stack`, `urls`, `description`, `tags`, `summary`.
-- Do not claim a project was created unless the tool call succeeds.
-- Do not invent project records; creation must go through the tool.
+Project delegation rules:
+- For any project-related request, use the `project_manager` tool (project manager agent tool).
+- Do not handle project operations directly in the coordinator.
+- If the user wants to create/add/save a project, delegate to `project_manager` with all project details.
+- Never ask the user for `oid` for project operations. It is injected from request context.
+- Do not claim a project operation succeeded unless the delegated tool call succeeds.
 
-Experience and achievement tool rules:
-- When the user asks to create/add/save experience, you must use the `create_experience` tool.
-- Before calling `create_experience`, collect: `company_name`, `start_date`, `end_date` (nullable), `position`, `description`, `location`.
-- When the user asks to create/add/save an achievement, you must use the `create_achievement` tool.
-- Before calling `create_achievement`, collect: `name`, `link`, `organisation`, `date`.
-- Never ask the user for `oid` for these actions. It is injected from request context.
-- Do not claim experience/achievement creation unless the tool call succeeds.
+Experience delegation rules:
+- For any experience-related request, use the `experience_manager` tool.
+- Do not handle experience operations directly in the coordinator.
+- If the user wants to create/add/save experience, delegate to `experience_manager` with all details.
+- Never ask the user for `oid` for experience operations. It is injected from request context.
+- Do not claim an experience operation succeeded unless the delegated tool call succeeds.
+
+Achievement delegation rules:
+- For any achievement-related request, use the `achievement_manager` tool.
+- Do not handle achievement operations directly in the coordinator.
+- If the user wants to create/add/save an achievement, delegate to `achievement_manager` with all details.
+- Never ask the user for `oid` for achievement operations. It is injected from request context.
+- Do not claim an achievement operation succeeded unless the delegated tool call succeeds.
 
 General behavior:
 - For resume drafting, refinement, LaTeX generation, and PDF generation, use `generate_resume_pdf` when needed.
@@ -93,7 +99,104 @@ Coordination behavior:
 - If the current user request is fully done, end your final response with exactly: Task complete.
 """
 
+project_manager_instructions = """
+You are the CareerSynth project manager agent.
+
+Project tool rules:
+- When the user asks to create/add/save a project, you must use the `create_project` tool.
+- Never ask the user for `oid`. It is injected from the authenticated request context.
+- Before calling `create_project`, collect all required fields: `name`, `tech_stack`, `urls`, `description`, `tags`, `summary`.
+- Do not claim a project was created unless the tool call succeeds.
+- Do not invent project records; creation must go through the tool.
+
+General behavior:
+- Focus only on project-related requests.
+- Ask clarifying questions only when required project fields are missing.
+- After tool completion, summarize the project result clearly.
+"""
+
+experience_manager_instructions = """
+You are the CareerSynth experience manager agent.
+
+Experience tool rules:
+- When the user asks to create/add/save experience, you must use the `create_experience` tool.
+- Never ask the user for `oid`. It is injected from the authenticated request context.
+- Before calling `create_experience`, collect all required fields: `company_name`, `start_date`, `end_date` (nullable), `position`, `description`, `location`.
+- Do not claim experience was created unless the tool call succeeds.
+- Do not invent experience records; creation must go through the tool.
+
+General behavior:
+- Focus only on experience-related requests.
+- Ask clarifying questions only when required experience fields are missing.
+- After tool completion, summarize the experience result clearly.
+"""
+
+achievement_manager_instructions = """
+You are the CareerSynth achievement manager agent.
+
+Achievement tool rules:
+- When the user asks to create/add/save an achievement, you must use the `create_achievement` tool.
+- Never ask the user for `oid`. It is injected from the authenticated request context.
+- Before calling `create_achievement`, collect all required fields: `name`, `link`, `organisation`, `date`.
+- Do not claim an achievement was created unless the tool call succeeds.
+- Do not invent achievement records; creation must go through the tool.
+
+General behavior:
+- Focus only on achievement-related requests.
+- Ask clarifying questions only when required achievement fields are missing.
+- After tool completion, summarize the achievement result clearly.
+"""
+
 app = FastAPI(title="AG-UI Server")
+
+
+project_manager_agent = Agent(
+    client=client,
+    instructions=project_manager_instructions,
+    name="project-manager",
+    middleware=[ToolCallSequenceRepairMiddleware()],
+    tools=[create_project_from_context_tool],
+)
+
+project_manager_tool = project_manager_agent.as_tool(
+    name="project_manager",
+    description="Handle project-related operations and create projects.",
+    arg_name="query",
+    arg_description="The project operation request",
+    propagate_session=True,
+)
+
+experience_manager_agent = Agent(
+    client=client,
+    instructions=experience_manager_instructions,
+    name="experience-manager",
+    middleware=[ToolCallSequenceRepairMiddleware()],
+    tools=[create_experience_from_context_tool],
+)
+
+experience_manager_tool = experience_manager_agent.as_tool(
+    name="experience_manager",
+    description="Handle experience-related operations and create experiences.",
+    arg_name="query",
+    arg_description="The experience operation request",
+    propagate_session=True,
+)
+
+achievement_manager_agent = Agent(
+    client=client,
+    instructions=achievement_manager_instructions,
+    name="achievement-manager",
+    middleware=[ToolCallSequenceRepairMiddleware()],
+    tools=[create_achievement_from_context_tool],
+)
+
+achievement_manager_tool = achievement_manager_agent.as_tool(
+    name="achievement_manager",
+    description="Handle achievement-related operations and create achievements.",
+    arg_name="query",
+    arg_description="The achievement operation request",
+    propagate_session=True,
+)
 
 agent = Agent(
     client=client,
@@ -101,13 +204,12 @@ agent = Agent(
     name="main",
     middleware=[ToolCallSequenceRepairMiddleware()],
     tools=[
-        create_project_from_context_tool,
-        create_experience_from_context_tool,
-        create_achievement_from_context_tool,
         generate_resume_pdf,
+        project_manager_tool,
+        experience_manager_tool,
+        achievement_manager_tool,
     ],
 )
-
 
 async def agui_auth_context(request: Request) -> AsyncGenerator[None, None]:
     auth_header = request.headers.get("authorization")
@@ -126,6 +228,27 @@ add_agent_framework_fastapi_endpoint(
     app,
     agent,
     "/",
+    dependencies=[Depends(agui_auth_context)],
+)
+
+add_agent_framework_fastapi_endpoint(
+    app,
+    project_manager_agent,
+    "/project-manager",
+    dependencies=[Depends(agui_auth_context)],
+)
+
+add_agent_framework_fastapi_endpoint(
+    app,
+    experience_manager_agent,
+    "/experience-manager",
+    dependencies=[Depends(agui_auth_context)],
+)
+
+add_agent_framework_fastapi_endpoint(
+    app,
+    achievement_manager_agent,
+    "/achievement-manager",
     dependencies=[Depends(agui_auth_context)],
 )
 
