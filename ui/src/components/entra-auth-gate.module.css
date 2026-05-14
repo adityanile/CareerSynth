@@ -1,0 +1,183 @@
+.loadingState {
+  color: #334155;
+  font-size: 0.95rem;
+  min-height: 100vh;
+  padding: 2rem;
+}
+
+.authPage {
+  align-items: center;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(15, 23, 42, 0.14), transparent 40%),
+    radial-gradient(circle at 85% 90%, rgba(2, 132, 199, 0.12), transparent 45%),
+    linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  overflow: hidden;
+  padding: 2rem 1rem;
+  position: relative;
+}
+
+.backgroundGlow {
+  background: radial-gradient(circle, rgba(15, 23, 42, 0.15) 0%, transparent 70%);
+  filter: blur(28px);
+  height: 360px;
+  pointer-events: none;
+  position: absolute;
+  right: -90px;
+  top: -90px;
+  width: 360px;
+}
+
+.authCard {
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid #dbe3ef;
+  border-radius: 20px;
+  box-shadow:
+    0 22px 50px rgba(15, 23, 42, 0.16),
+    0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  max-width: 540px;
+  padding: 2.2rem;
+  position: relative;
+  width: 100%;
+  z-index: 1;
+}
+
+.kicker {
+  color: #0369a1;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin: 0 0 0.8rem;
+  text-transform: uppercase;
+}
+
+.authTitle {
+  color: #0f172a;
+  font-size: clamp(1.65rem, 4vw, 2.05rem);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.authDescription {
+  color: #475569;
+  font-size: 0.98rem;
+  line-height: 1.55;
+  margin: 1rem 0 1.5rem;
+  max-width: 48ch;
+}
+
+.primaryButton,
+.secondaryButton {
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.83rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0.75rem 1.1rem;
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    border-color 140ms ease,
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.primaryButton {
+  background: linear-gradient(135deg, #0f172a, #1e293b);
+  border: 1px solid #0f172a;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.25);
+  color: #ffffff;
+}
+
+.primaryButton:hover {
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.32);
+  transform: translateY(-1px);
+}
+
+.secondaryButton {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+.secondaryButton:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.primaryButton:focus-visible,
+.secondaryButton:focus-visible {
+  outline: 2px solid #0f172a;
+  outline-offset: 2px;
+}
+
+.errorText {
+  color: #b91c1c;
+  font-size: 0.82rem;
+  margin: 1rem 0 0;
+}
+
+.appShell {
+  min-height: 100vh;
+}
+
+.sessionBar {
+  align-items: center;
+  backdrop-filter: blur(4px);
+  background: rgba(248, 250, 252, 0.88);
+  border-bottom: 1px solid #d8e0ea;
+  display: flex;
+  gap: 0.9rem;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.accountLabel {
+  color: #1f2937;
+  font-size: 0.92rem;
+}
+
+.sessionActions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  justify-content: flex-end;
+}
+
+.infoBanner,
+.errorBanner {
+  border-radius: 10px;
+  margin: 0.75rem 1rem 0;
+  padding: 0.75rem 0.9rem;
+}
+
+.infoBanner {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
+}
+
+.errorBanner {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+@media (max-width: 680px) {
+  .authCard {
+    border-radius: 16px;
+    padding: 1.5rem;
+  }
+
+  .sessionBar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

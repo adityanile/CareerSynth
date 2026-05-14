@@ -1,6 +1,7 @@
 import os
 import sqlite3
 from collections.abc import AsyncGenerator
+from functools import wraps
 from typing import Any, Optional
 import json
 
@@ -10,7 +11,8 @@ from agent_framework.openai import OpenAIChatCompletionClient
 from agent_framework.ag_ui import AgentFrameworkAgent, add_agent_framework_fastapi_endpoint
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.openapi.utils import get_openapi
-from fastapi_microsoft_identity import AuthError, initialize, requires_auth, validate_scope
+from fastapi_microsoft_identity import initialize
+from auth_validation import authenticate_request
 
 from agent_profile_tools import (
     create_achievement_from_context_tool,
@@ -68,8 +70,6 @@ from resume_state_tools import (
 from resume_pdf_tool import generate_resume_pdf
 from tool_call_sequence_middleware import ToolCallSequenceRepairMiddleware
 
-from fastapi_microsoft_identity import auth_service as token_auth_service
-
 load_dotenv()
 
 entra_tenant_id = os.getenv("ENTRA_TENANT_ID")
@@ -79,6 +79,7 @@ if not entra_tenant_id or not entra_client_id:
     raise RuntimeError("ENTRA_TENANT_ID and ENTRA_CLIENT_ID are required.")
 
 initialize(tenant_id_=entra_tenant_id, client_id_=entra_client_id)
+
 entra_required_scope = os.getenv("ENTRA_REQUIRED_SCOPE", "User")
 db_path = os.getenv("SQLITE_DB_PATH", "careersynth.db")
 
@@ -133,7 +134,7 @@ app = FastAPI(title="AG-UI Server")
 _default_resume_state_model = ResumeState()
 DEFAULT_RESUME_STATE = _default_resume_state_model.model_dump()
 
-# This is for access API Through SWagger
+# This is for access API Through SWaggert 
 def _install_jwt_openapi_security(app_instance: FastAPI) -> None:
     def custom_openapi():
         if app_instance.openapi_schema:
@@ -342,18 +343,41 @@ def model_to_partial_dict(model: Any) -> dict[str, Any]:
     return model.dict(exclude_unset=True)
 
 
+def _allowed_tenants_from_env() -> list[str]:
+    raw = os.getenv("ENTRA_ALLOWED_TENANTS", "")
+    return [tenant.strip() for tenant in raw.split(",") if tenant.strip()]
+
+
+def _ensure_authenticated_claims(request: Request) -> dict[str, Any]:
+    return authenticate_request(
+        request,
+        client_id=entra_client_id,
+        required_scope=entra_required_scope,
+        allowed_tenants=_allowed_tenants_from_env() or None,
+    )
+
+
+def requires_auth(route_handler):
+    @wraps(route_handler)
+    async def decorated(*args, **kwargs):
+        request = kwargs.get("request")
+        if not isinstance(request, Request):
+            raise HTTPException(status_code=500, detail="Request context is required")
+        _ensure_authenticated_claims(request)
+        return await route_handler(*args, **kwargs)
+
+    return decorated
+
+
 def get_oid_or_401(request: Request) -> str:
-    token_claims = token_auth_service.get_token_claims(request)
+    token_claims = _ensure_authenticated_claims(request)
     oid = token_claims.get("oid")
     if not oid:
         raise HTTPException(status_code=401, detail="Missing oid claim in token")
     return str(oid)
 
 def authorize_and_get_oid(request: Request) -> str:
-    try:
-        validate_scope(required_scope=entra_required_scope, request=request)
-    except AuthError as exc:
-        raise HTTPException(status_code=403, detail=exc.error_msg) from exc
+    _ensure_authenticated_claims(request)
     return get_oid_or_401(request)
 
 

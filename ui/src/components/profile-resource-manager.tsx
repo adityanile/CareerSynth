@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import {
   getEntraAccessToken,
   subscribeToEntraAccessToken,
@@ -140,6 +141,11 @@ async function request<TResponse>(
 }
 
 export function ProfileResourceManager() {
+  const hasMounted = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
   const accessToken = useSyncExternalStore(
     subscribeToEntraAccessToken,
     getEntraAccessToken,
@@ -407,176 +413,178 @@ export function ProfileResourceManager() {
         <span className={styles.badge}>{totalItems}</span>
       </button>
 
-      {isOpen && (
-        <>
-          <div
-            className={styles.overlay}
-            onClick={() => setIsOpen(false)}
-            aria-hidden="true"
-          />
-          <section className={styles.modal}>
-            <header className={styles.header}>
-              <div>
-                <h2 className={styles.title}>CareerSynth Database State</h2>
-                <p className={styles.subtitle}>
-                  Backend CRUD for projects, experiences, and achievements.
-                </p>
-              </div>
-              <button
-                type="button"
-                className={styles.closeButton}
-                onClick={() => setIsOpen(false)}
-              >
-                Close
-              </button>
-            </header>
-
-            {error && <p className={styles.error}>{error}</p>}
-
-            <div className={styles.tabs}>
-              {tabs.map((tab) => (
+      {isOpen &&
+        hasMounted &&
+        createPortal(
+          <div className={styles.modalLayer}>
+            <div
+              className={styles.overlay}
+              onClick={() => setIsOpen(false)}
+              aria-hidden="true"
+            />
+            <section className={styles.modal}>
+              <header className={styles.header}>
+                <div>
+                  <h2 className={styles.title}>CareerSynth Database State</h2>
+                  <p className={styles.subtitle}>
+                    Backend CRUD for projects, experiences, and achievements.
+                  </p>
+                </div>
                 <button
-                  key={tab.key}
                   type="button"
-                  className={`${styles.tabButton} ${activeTab === tab.key ? styles.tabButtonActive : ""}`}
-                  onClick={() => setActiveTab(tab.key)}
+                  className={styles.closeButton}
+                  onClick={() => setIsOpen(false)}
                 >
-                  {tab.label}
+                  Close
                 </button>
-              ))}
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={() => void loadAllResources(accessToken)}
-                disabled={isLoading || isSaving}
-              >
-                {isLoading ? "Refreshing..." : "Refresh"}
-              </button>
-            </div>
+              </header>
 
-            <div className={styles.content}>
-              {activeTab === "projects" && (
-                <>
-                  <article className={styles.panel}>
-                    <h3 className={styles.panelTitle}>Projects</h3>
-                    {projects.length === 0 ? (
-                      <p className={styles.empty}>No projects found.</p>
-                    ) : (
-                      <ul className={styles.list}>
-                        {projects.map((item) => (
-                          <li key={item.id} className={styles.item}>
-                            <p className={styles.itemTitle}>{item.name}</p>
-                            <p className={styles.itemLine}>{item.description}</p>
-                            <p className={styles.itemLine}>Tech: {item.techStack.join(", ") || "N/A"}</p>
-                            <div className={styles.actions}>
-                              <button
-                                type="button"
-                                className={styles.button}
-                                onClick={() => {
-                                  setEditingProjectId(item.id);
-                                  setProjectForm({
-                                    name: item.name,
-                                    description: item.description,
-                                    techStack: item.techStack.join(", "),
-                                    urls: item.urls.join(", "),
-                                    tags: item.tags.join(", "),
-                                  });
-                                }}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                className={`${styles.button} ${styles.deleteButton}`}
-                                onClick={() => void deleteResource("projects", item.id)}
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </article>
+              {error && <p className={styles.error}>{error}</p>}
 
-                  <article className={styles.panel}>
-                    <h3 className={styles.panelTitle}>
-                      {editingProjectId === null ? "Add Project" : "Edit Project"}
-                    </h3>
-                    <form className={styles.form} onSubmit={(event) => void submitProject(event)}>
-                      <label className={styles.label}>
-                        Name
-                        <input
-                          className={styles.input}
-                          value={projectForm.name}
-                          onChange={(event) =>
-                            setProjectForm((current) => ({ ...current, name: event.target.value }))
-                          }
-                        />
-                      </label>
-                      <label className={styles.label}>
-                        Description
-                        <textarea
-                          className={styles.textarea}
-                          value={projectForm.description}
-                          onChange={(event) =>
-                            setProjectForm((current) => ({
-                              ...current,
-                              description: event.target.value,
-                            }))
-                          }
-                        />
-                      </label>
-                      <label className={styles.label}>
-                        Tech Stack (comma separated)
-                        <input
-                          className={styles.input}
-                          value={projectForm.techStack}
-                          onChange={(event) =>
-                            setProjectForm((current) => ({
-                              ...current,
-                              techStack: event.target.value,
-                            }))
-                          }
-                        />
-                      </label>
-                      <label className={styles.label}>
-                        URLs (comma separated)
-                        <input
-                          className={styles.input}
-                          value={projectForm.urls}
-                          onChange={(event) =>
-                            setProjectForm((current) => ({ ...current, urls: event.target.value }))
-                          }
-                        />
-                      </label>
-                      <label className={styles.label}>
-                        Tags (comma separated)
-                        <input
-                          className={styles.input}
-                          value={projectForm.tags}
-                          onChange={(event) =>
-                            setProjectForm((current) => ({ ...current, tags: event.target.value }))
-                          }
-                        />
-                      </label>
-                      <div className={styles.formActions}>
-                        <button type="submit" className={styles.primaryButton} disabled={isSaving}>
-                          {isSaving ? "Saving..." : editingProjectId === null ? "Add" : "Update"}
-                        </button>
-                        <button
-                          type="button"
-                          className={styles.secondaryButton}
-                          onClick={resetProjectForm}
-                          disabled={isSaving}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                    </form>
-                  </article>
-                </>
-              )}
+              <div className={styles.tabs}>
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    className={`${styles.tabButton} ${activeTab === tab.key ? styles.tabButtonActive : ""}`}
+                    onClick={() => setActiveTab(tab.key)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => void loadAllResources(accessToken)}
+                  disabled={isLoading || isSaving}
+                >
+                  {isLoading ? "Refreshing..." : "Refresh"}
+                </button>
+              </div>
+
+              <div className={styles.content}>
+                {activeTab === "projects" && (
+                  <>
+                    <article className={styles.panel}>
+                      <h3 className={styles.panelTitle}>Projects</h3>
+                      {projects.length === 0 ? (
+                        <p className={styles.empty}>No projects found.</p>
+                      ) : (
+                        <ul className={styles.list}>
+                          {projects.map((item) => (
+                            <li key={item.id} className={styles.item}>
+                              <p className={styles.itemTitle}>{item.name}</p>
+                              <p className={styles.itemLine}>{item.description}</p>
+                              <p className={styles.itemLine}>Tech: {item.techStack.join(", ") || "N/A"}</p>
+                              <div className={styles.actions}>
+                                <button
+                                  type="button"
+                                  className={styles.button}
+                                  onClick={() => {
+                                    setEditingProjectId(item.id);
+                                    setProjectForm({
+                                      name: item.name,
+                                      description: item.description,
+                                      techStack: item.techStack.join(", "),
+                                      urls: item.urls.join(", "),
+                                      tags: item.tags.join(", "),
+                                    });
+                                  }}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`${styles.button} ${styles.deleteButton}`}
+                                  onClick={() => void deleteResource("projects", item.id)}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </article>
+
+                    <article className={styles.panel}>
+                      <h3 className={styles.panelTitle}>
+                        {editingProjectId === null ? "Add Project" : "Edit Project"}
+                      </h3>
+                      <form className={styles.form} onSubmit={(event) => void submitProject(event)}>
+                        <label className={styles.label}>
+                          Name
+                          <input
+                            className={styles.input}
+                            value={projectForm.name}
+                            onChange={(event) =>
+                              setProjectForm((current) => ({ ...current, name: event.target.value }))
+                            }
+                          />
+                        </label>
+                        <label className={styles.label}>
+                          Description
+                          <textarea
+                            className={styles.textarea}
+                            value={projectForm.description}
+                            onChange={(event) =>
+                              setProjectForm((current) => ({
+                                ...current,
+                                description: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <label className={styles.label}>
+                          Tech Stack (comma separated)
+                          <input
+                            className={styles.input}
+                            value={projectForm.techStack}
+                            onChange={(event) =>
+                              setProjectForm((current) => ({
+                                ...current,
+                                techStack: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <label className={styles.label}>
+                          URLs (comma separated)
+                          <input
+                            className={styles.input}
+                            value={projectForm.urls}
+                            onChange={(event) =>
+                              setProjectForm((current) => ({ ...current, urls: event.target.value }))
+                            }
+                          />
+                        </label>
+                        <label className={styles.label}>
+                          Tags (comma separated)
+                          <input
+                            className={styles.input}
+                            value={projectForm.tags}
+                            onChange={(event) =>
+                              setProjectForm((current) => ({ ...current, tags: event.target.value }))
+                            }
+                          />
+                        </label>
+                        <div className={styles.formActions}>
+                          <button type="submit" className={styles.primaryButton} disabled={isSaving}>
+                            {isSaving ? "Saving..." : editingProjectId === null ? "Add" : "Update"}
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.secondaryButton}
+                            onClick={resetProjectForm}
+                            disabled={isSaving}
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      </form>
+                    </article>
+                  </>
+                )}
 
               {activeTab === "experiences" && (
                 <>
@@ -837,10 +845,11 @@ export function ProfileResourceManager() {
                   </article>
                 </>
               )}
-            </div>
-          </section>
-        </>
-      )}
+              </div>
+            </section>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

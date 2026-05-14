@@ -69,6 +69,8 @@ AZURE_STORAGE_CONTAINER_NAME=...
 ENTRA_TENANT_ID=...
 ENTRA_CLIENT_ID=...
 ENTRA_REQUIRED_SCOPE=User
+# Optional: comma-separated tenant allow-list (if unset, all tenants accepted)
+# ENTRA_ALLOWED_TENANTS=<tenant-guid-1>,<tenant-guid-2>
 
 # Optional: SQLite path
 SQLITE_DB_PATH=careersynth.db
@@ -76,8 +78,23 @@ SQLITE_DB_PATH=careersynth.db
 
 ## CRUD API (JWT Protected)
 
-All endpoints below require a valid bearer token and scope check (`ENTRA_REQUIRED_SCOPE`).
-User isolation is enforced with `oid` claim from JWT.
+All endpoints below require a valid bearer token with cryptographic JWT validation.
+User isolation is enforced with the verified `oid` claim from JWT.
+
+Validation behavior:
+- Signature verification uses Microsoft Entra JWKS (resolved by token `tid`, with `common` fallback).
+- Audience must match `ENTRA_CLIENT_ID` or `api://ENTRA_CLIENT_ID`.
+- Issuer must match tenant-aware Entra patterns:
+  - `https://login.microsoftonline.com/{tid}/v2.0` (or trailing slash)
+  - `https://sts.windows.net/{tid}/` for v1 tokens
+- Required permission check uses `ENTRA_REQUIRED_SCOPE` against token `scp` or `roles`.
+- Optional tenant restriction is controlled by `ENTRA_ALLOWED_TENANTS`.
+
+Expected token claims:
+- `tid`: tenant id (used for key discovery and issuer checks)
+- `oid`: object id (used for per-user data isolation)
+- `scp` or `roles`: permission required by `ENTRA_REQUIRED_SCOPE`
+- `aud`, `iss`, `exp`: standard JWT claims used in validation
 
 Swagger/OpenAPI:
 - `GET /docs` exposes an `Authorize` button with `BearerAuth` (JWT).

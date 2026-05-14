@@ -20,6 +20,7 @@ import {
   clearEntraAccessToken,
   setEntraAccessToken,
 } from "@/lib/entra-token-store";
+import styles from "./entra-auth-gate.module.css";
 
 type SessionState = "idle" | "syncing" | "ready" | "error";
 
@@ -151,56 +152,61 @@ export function EntraAuthGate({ children }: { children: ReactNode }) {
     !activeAccount;
 
   if (!hasMounted) {
-    return <main style={{ padding: "2rem" }}>Loading authentication...</main>;
+    return <main className={styles.loadingState}>Loading authentication...</main>;
   }
 
   if (!isSignedIn) {
     return (
-      <main style={{ padding: "2rem", maxWidth: "40rem", margin: "0 auto" }}>
-        <h1>Sign in required</h1>
-        <p>Use your Microsoft Entra account to access CareerSynth.</p>
-        <button type="button" onClick={() => void handleSignIn()}>
-          Sign in with Microsoft
-        </button>
-        {authError && <p style={{ color: "#b00020" }}>{authError}</p>}
+      <main className={styles.authPage}>
+        <div className={styles.backgroundGlow} aria-hidden="true" />
+        <section className={styles.authCard}>
+          <p className={styles.kicker}>CareerSynth Workspace</p>
+          <h1 className={styles.authTitle}>Sign in to continue</h1>
+          <p className={styles.authDescription}>
+            Use your Microsoft Entra account to access your conversations and
+            profile-linked context.
+          </p>
+          <button
+            type="button"
+            className={styles.primaryButton}
+            onClick={() => void handleSignIn()}
+          >
+            Sign in with Microsoft
+          </button>
+          {authError && <p className={styles.errorText}>{authError}</p>}
+        </section>
       </main>
     );
   }
 
   return (
-    <main>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: "1rem",
-          padding: "0.75rem 1rem",
-          borderBottom: "1px solid #d5d7db",
-          background: "#f8fafc",
-        }}
-      >
-        <span style={{ fontSize: "0.95rem", color: "#1f2937" }}>
+    <main className={styles.appShell}>
+      <div className={styles.sessionBar}>
+        <span className={styles.accountLabel}>
           Signed in as <strong>{activeAccount?.username ?? "Entra user"}</strong>
         </span>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+        <div className={styles.sessionActions}>
           <ProfileResourceManager />
-          <button type="button" onClick={() => void handleSignOut()}>
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            onClick={() => void handleSignOut()}
+          >
             Sign out
           </button>
         </div>
       </div>
 
       {sessionState === "syncing" && (
-        <p style={{ padding: "1rem" }}>Establishing secure session...</p>
+        <p className={styles.infoBanner}>Establishing secure session...</p>
       )}
       {sessionState === "error" && (
-        <p style={{ padding: "1rem", color: "#b00020" }}>
+        <p className={styles.errorBanner}>
           {authError ?? "Authentication failed."}
         </p>
       )}
       {missingActiveAccount && (
-        <p style={{ padding: "1rem", color: "#b00020" }}>
+        <p className={styles.errorBanner}>
           No active Entra account is available. Sign out and sign in again.
         </p>
       )}
