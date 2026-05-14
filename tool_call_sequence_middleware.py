@@ -18,11 +18,28 @@ def _assistant_call_ids(message: Message) -> list[str]:
     return ids
 
 
-def _tool_result_id(message: Message) -> str | None:
+def _tool_result_call_ids(message: Message) -> list[str]:
+    ids: list[str] = []
     for content in message.contents or []:
         if content.type == "function_result" and content.call_id:
-            return str(content.call_id)
-    return None
+            ids.append(str(content.call_id))
+    return ids
+
+
+def _single_tool_result_message(message: Message, call_id: str) -> Message:
+    matched_content = None
+    for content in message.contents or []:
+        if content.type == "function_result" and content.call_id and str(content.call_id) == call_id:
+            matched_content = content
+            break
+
+    if matched_content is None:
+        raise RuntimeError(f"No function_result content found for call_id={call_id}")
+
+    single = Message(role=message.role, contents=[matched_content])
+    single.message_id = message.message_id
+    single.additional_properties = dict(message.additional_properties or {})
+    return single
 
 
 def _dedupe_by_message_id(messages: list[Message]) -> list[Message]:
@@ -72,17 +89,18 @@ class ToolCallSequenceRepairMiddleware(ChatMiddleware):
         call_next: Callable[[], Awaitable[None]],
     ) -> None:
         messages = _dedupe_by_message_id(list(context.messages))
-        # Capture first tool-result message per call_id from anywhere in history.
-        # We later re-attach these results immediately after the matching assistant call.
+        # Capture first tool-result content per call_id from anywhere in history.
+        # We later re-attach a canonical single-result tool message right after the matching assistant call.
         tool_result_by_call_id: dict[str, Message] = {}
         for msg in messages:
             if _role_value(msg) != "tool":
                 continue
-            call_id = _tool_result_id(msg)
-            if not call_id:
+            call_ids = _tool_result_call_ids(msg)
+            if not call_ids:
                 continue
-            if call_id not in tool_result_by_call_id:
-                tool_result_by_call_id[call_id] = msg
+            for call_id in call_ids:
+                if call_id not in tool_result_by_call_id:
+                    tool_result_by_call_id[call_id] = _single_tool_result_message(msg, call_id)
 
         normalized: list[Message] = []
         consumed_call_ids: set[str] = set()
