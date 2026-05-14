@@ -6,6 +6,10 @@ class ProfileValidationError(Exception):
     pass
 
 
+class ProfileNotFoundError(Exception):
+    pass
+
+
 _db_path = "careersynth.db"
 
 
@@ -32,6 +36,13 @@ def _normalize_date(value: Optional[str], field_name: str, allow_null: bool = Fa
     if not normalized_value:
         raise ProfileValidationError(f"{field_name} is required")
     return normalized_value
+
+
+def _require_non_empty_text(value: Optional[str], field_name: str) -> str:
+    normalized = (value or "").strip()
+    if not normalized:
+        raise ProfileValidationError(f"{field_name} cannot be empty")
+    return normalized
 
 
 def _row_to_experience(row: sqlite3.Row) -> dict[str, Any]:
@@ -81,6 +92,27 @@ def _list_rows_for_oid(
     sql = f"SELECT * FROM {table} WHERE {' AND '.join(where_clauses)} ORDER BY id DESC"
     with _get_db_connection() as conn:
         return conn.execute(sql, params).fetchall()
+
+
+def _fetch_row_by_id_for_oid(*, table: str, row_id: int, oid: str, not_found_message: str) -> sqlite3.Row:
+    with _get_db_connection() as conn:
+        row = conn.execute(
+            f"SELECT * FROM {table} WHERE id = ? AND oid = ?",
+            (row_id, oid),
+        ).fetchone()
+    if not row:
+        raise ProfileNotFoundError(not_found_message)
+    return row
+
+
+def _delete_row_by_id_for_oid(*, table: str, row_id: int, oid: str, not_found_message: str) -> None:
+    with _get_db_connection() as conn:
+        cursor = conn.execute(
+            f"DELETE FROM {table} WHERE id = ? AND oid = ?",
+            (row_id, oid),
+        )
+    if cursor.rowcount == 0:
+        raise ProfileNotFoundError(not_found_message)
 
 
 def list_experiences_for_user(
@@ -153,6 +185,80 @@ def create_experience_for_user(
     return _row_to_experience(row)
 
 
+def get_experience_for_user(oid: str, experience_id: int) -> dict[str, Any]:
+    row = _fetch_row_by_id_for_oid(
+        table="experiences",
+        row_id=experience_id,
+        oid=oid,
+        not_found_message="Experience not found",
+    )
+    return _row_to_experience(row)
+
+
+def update_experience_for_user(
+    oid: str,
+    experience_id: int,
+    updates: dict[str, Any],
+) -> dict[str, Any]:
+    if not updates:
+        raise ProfileValidationError("No fields provided for update")
+
+    set_clauses: list[str] = []
+    params: list[Any] = []
+
+    if "companyName" in updates:
+        set_clauses.append("company_name = ?")
+        params.append(_require_non_empty_text(updates["companyName"], "companyName"))
+
+    if "startDate" in updates:
+        set_clauses.append("start_date = ?")
+        params.append(_normalize_date(updates["startDate"], "startDate"))
+
+    if "endDate" in updates:
+        set_clauses.append("end_date = ?")
+        params.append(_normalize_date(updates["endDate"], "endDate", allow_null=True))
+
+    if "position" in updates:
+        set_clauses.append("position = ?")
+        params.append(_require_non_empty_text(updates["position"], "position"))
+
+    if "description" in updates:
+        set_clauses.append("description = ?")
+        params.append(_require_non_empty_text(updates["description"], "description"))
+
+    if "location" in updates:
+        set_clauses.append("location = ?")
+        params.append(_require_non_empty_text(updates["location"], "location"))
+
+    if not set_clauses:
+        raise ProfileValidationError("No valid fields provided for update")
+
+    set_clauses.append("updated_at = CURRENT_TIMESTAMP")
+    params.extend([experience_id, oid])
+
+    with _get_db_connection() as conn:
+        cursor = conn.execute(
+            f"UPDATE experiences SET {', '.join(set_clauses)} WHERE id = ? AND oid = ?",
+            params,
+        )
+        if cursor.rowcount == 0:
+            raise ProfileNotFoundError("Experience not found")
+        row = conn.execute(
+            "SELECT * FROM experiences WHERE id = ? AND oid = ?",
+            (experience_id, oid),
+        ).fetchone()
+    return _row_to_experience(row)
+
+
+def delete_experience_for_user(oid: str, experience_id: int) -> None:
+    _delete_row_by_id_for_oid(
+        table="experiences",
+        row_id=experience_id,
+        oid=oid,
+        not_found_message="Experience not found",
+    )
+
+
 def create_achievement_for_user(
     oid: str,
     name: str,
@@ -184,3 +290,69 @@ def create_achievement_for_user(
         ).fetchone()
 
     return _row_to_achievement(row)
+
+
+def get_achievement_for_user(oid: str, achievement_id: int) -> dict[str, Any]:
+    row = _fetch_row_by_id_for_oid(
+        table="achievements",
+        row_id=achievement_id,
+        oid=oid,
+        not_found_message="Achievement not found",
+    )
+    return _row_to_achievement(row)
+
+
+def update_achievement_for_user(
+    oid: str,
+    achievement_id: int,
+    updates: dict[str, Any],
+) -> dict[str, Any]:
+    if not updates:
+        raise ProfileValidationError("No fields provided for update")
+
+    set_clauses: list[str] = []
+    params: list[Any] = []
+
+    if "name" in updates:
+        set_clauses.append("name = ?")
+        params.append(_require_non_empty_text(updates["name"], "name"))
+
+    if "link" in updates:
+        set_clauses.append("link = ?")
+        params.append(_require_non_empty_text(updates["link"], "link"))
+
+    if "organisation" in updates:
+        set_clauses.append("organisation = ?")
+        params.append(_require_non_empty_text(updates["organisation"], "organisation"))
+
+    if "date" in updates:
+        set_clauses.append("date = ?")
+        params.append(_normalize_date(updates["date"], "date"))
+
+    if not set_clauses:
+        raise ProfileValidationError("No valid fields provided for update")
+
+    set_clauses.append("updated_at = CURRENT_TIMESTAMP")
+    params.extend([achievement_id, oid])
+
+    with _get_db_connection() as conn:
+        cursor = conn.execute(
+            f"UPDATE achievements SET {', '.join(set_clauses)} WHERE id = ? AND oid = ?",
+            params,
+        )
+        if cursor.rowcount == 0:
+            raise ProfileNotFoundError("Achievement not found")
+        row = conn.execute(
+            "SELECT * FROM achievements WHERE id = ? AND oid = ?",
+            (achievement_id, oid),
+        ).fetchone()
+    return _row_to_achievement(row)
+
+
+def delete_achievement_for_user(oid: str, achievement_id: int) -> None:
+    _delete_row_by_id_for_oid(
+        table="achievements",
+        row_id=achievement_id,
+        oid=oid,
+        not_found_message="Achievement not found",
+    )

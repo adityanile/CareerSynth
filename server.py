@@ -9,6 +9,7 @@ from agent_framework import Agent
 from agent_framework.openai import OpenAIChatCompletionClient
 from agent_framework.ag_ui import AgentFrameworkAgent, add_agent_framework_fastapi_endpoint
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.openapi.utils import get_openapi
 from fastapi_microsoft_identity import AuthError, initialize, requires_auth, validate_scope
 
 from agent_profile_tools import (
@@ -45,12 +46,19 @@ from project_tools import (
     update_project_for_user,
 )
 from profile_tools import (
+    ProfileNotFoundError,
     ProfileValidationError,
     configure_profile_db,
+    delete_achievement_for_user,
+    delete_experience_for_user,
     create_achievement_for_user,
     create_experience_for_user,
+    get_achievement_for_user,
+    get_experience_for_user,
     list_achievements_for_user,
     list_experiences_for_user,
+    update_achievement_for_user,
+    update_experience_for_user,
 )
 from resume_state_tools import (
     add_achievement_to_resume_tool,
@@ -124,6 +132,48 @@ Response behavior:
 app = FastAPI(title="AG-UI Server")
 _default_resume_state_model = ResumeState()
 DEFAULT_RESUME_STATE = _default_resume_state_model.model_dump()
+
+# This is for access API Through SWagger
+def _install_jwt_openapi_security(app_instance: FastAPI) -> None:
+    def custom_openapi():
+        if app_instance.openapi_schema:
+            return app_instance.openapi_schema
+
+        schema = get_openapi(
+            title=app_instance.title,
+            version="1.0.0",
+            description=(
+                "CareerSynth backend APIs.\n\n"
+                "JWT Bearer authentication is required for all `/api/*`, `/auth/test`, and AG-UI routes."
+            ),
+            routes=app_instance.routes,
+        )
+
+        components = schema.setdefault("components", {})
+        security_schemes = components.setdefault("securitySchemes", {})
+        security_schemes["BearerAuth"] = {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "Paste access token as: Bearer <JWT>",
+        }
+
+        for path, operations in schema.get("paths", {}).items():
+            if path == "/health":
+                continue
+            if not isinstance(operations, dict):
+                continue
+            for _, operation in operations.items():
+                if isinstance(operation, dict):
+                    operation["security"] = [{"BearerAuth": []}]
+
+        app_instance.openapi_schema = schema
+        return app_instance.openapi_schema
+
+    app_instance.openapi = custom_openapi
+
+
+_install_jwt_openapi_security(app)
 
 
 agent = Agent(
@@ -292,18 +342,6 @@ def model_to_partial_dict(model: Any) -> dict[str, Any]:
     return model.dict(exclude_unset=True)
 
 
-def validate_date_text(value: Optional[str], field_name: str, allow_null: bool = False) -> None:
-    if value is None and allow_null:
-        return
-    if allow_null and isinstance(value, str) and not value.strip():
-        return
-    if value is None:
-        raise HTTPException(status_code=400, detail=f"{field_name} is required")
-    normalized_value = value.strip()
-    if not normalized_value:
-        raise HTTPException(status_code=400, detail=f"{field_name} is required")
-
-
 def get_oid_or_401(request: Request) -> str:
     token_claims = token_auth_service.get_token_claims(request)
     oid = token_claims.get("oid")
@@ -317,32 +355,6 @@ def authorize_and_get_oid(request: Request) -> str:
     except AuthError as exc:
         raise HTTPException(status_code=403, detail=exc.error_msg) from exc
     return get_oid_or_401(request)
-
-
-def row_to_experience(row: sqlite3.Row) -> dict[str, Any]:
-    return {
-        "id": row["id"],
-        "companyName": row["company_name"],
-        "startDate": row["start_date"],
-        "endDate": row["end_date"],
-        "position": row["position"],
-        "description": row["description"],
-        "location": row["location"],
-        "createdAt": row["created_at"],
-        "updatedAt": row["updated_at"],
-    }
-
-
-def row_to_achievement(row: sqlite3.Row) -> dict[str, Any]:
-    return {
-        "id": row["id"],
-        "name": row["name"],
-        "link": row["link"],
-        "organisation": row["organisation"],
-        "date": row["date"],
-        "createdAt": row["created_at"],
-        "updatedAt": row["updated_at"],
-    }
 
 
 @app.get("/health")
@@ -477,16 +489,10 @@ async def create_experience(request: Request, payload: ExperienceCreate) -> dict
 @requires_auth
 async def get_experience(request: Request, experience_id: int) -> dict[str, Any]:
     oid = authorize_and_get_oid(request)
-
-    with get_db_connection() as conn:
-        row = conn.execute(
-            "SELECT * FROM experiences WHERE id = ? AND oid = ?",
-            (experience_id, oid),
-        ).fetchone()
-
-    if not row:
-        raise HTTPException(status_code=404, detail="Experience not found")
-    return row_to_experience(row)
+    try:
+        return get_experience_for_user(oid=oid, experience_id=experience_id)
+    except ProfileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.get("/api/experiences/by-position/{position}")
@@ -520,82 +526,22 @@ async def patch_experience(
 ) -> dict[str, Any]:
     oid = authorize_and_get_oid(request)
     updates = model_to_partial_dict(payload)
-
-    if not updates:
-        raise HTTPException(status_code=400, detail="No fields provided for update")
-
-    set_clauses: list[str] = []
-    params: list[Any] = []
-
-    if "companyName" in updates:
-        value = (updates["companyName"] or "").strip()
-        if not value:
-            raise HTTPException(status_code=400, detail="companyName cannot be empty")
-        set_clauses.append("company_name = ?")
-        params.append(value)
-
-    if "startDate" in updates:
-        validate_date_text(updates["startDate"], "startDate")
-        set_clauses.append("start_date = ?")
-        params.append(updates["startDate"])
-
-    if "endDate" in updates:
-        validate_date_text(updates["endDate"], "endDate", allow_null=True)
-        set_clauses.append("end_date = ?")
-        params.append(updates["endDate"])
-
-    if "position" in updates:
-        value = (updates["position"] or "").strip()
-        if not value:
-            raise HTTPException(status_code=400, detail="position cannot be empty")
-        set_clauses.append("position = ?")
-        params.append(value)
-
-    if "description" in updates:
-        value = (updates["description"] or "").strip()
-        if not value:
-            raise HTTPException(status_code=400, detail="description cannot be empty")
-        set_clauses.append("description = ?")
-        params.append(value)
-
-    if "location" in updates:
-        value = (updates["location"] or "").strip()
-        if not value:
-            raise HTTPException(status_code=400, detail="location cannot be empty")
-        set_clauses.append("location = ?")
-        params.append(value)
-
-    set_clauses.append("updated_at = CURRENT_TIMESTAMP")
-    params.extend([experience_id, oid])
-
-    with get_db_connection() as conn:
-        cursor = conn.execute(
-            f"UPDATE experiences SET {', '.join(set_clauses)} WHERE id = ? AND oid = ?",
-            params,
-        )
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Experience not found")
-        row = conn.execute(
-            "SELECT * FROM experiences WHERE id = ? AND oid = ?",
-            (experience_id, oid),
-        ).fetchone()
-
-    return row_to_experience(row)
+    try:
+        return update_experience_for_user(oid=oid, experience_id=experience_id, updates=updates)
+    except ProfileValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ProfileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.delete("/api/experiences/{experience_id}", status_code=204)
 @requires_auth
 async def delete_experience(request: Request, experience_id: int) -> None:
     oid = authorize_and_get_oid(request)
-
-    with get_db_connection() as conn:
-        cursor = conn.execute(
-            "DELETE FROM experiences WHERE id = ? AND oid = ?",
-            (experience_id, oid),
-        )
-
-    if cursor.rowcount == 0:
-        raise HTTPException(status_code=404, detail="Experience not found")
+    try:
+        delete_experience_for_user(oid=oid, experience_id=experience_id)
+    except ProfileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.get("/api/achievements")
@@ -630,16 +576,10 @@ async def create_achievement(request: Request, payload: AchievementCreate) -> di
 @requires_auth
 async def get_achievement(request: Request, achievement_id: int) -> dict[str, Any]:
     oid = authorize_and_get_oid(request)
-
-    with get_db_connection() as conn:
-        row = conn.execute(
-            "SELECT * FROM achievements WHERE id = ? AND oid = ?",
-            (achievement_id, oid),
-        ).fetchone()
-
-    if not row:
-        raise HTTPException(status_code=404, detail="Achievement not found")
-    return row_to_achievement(row)
+    try:
+        return get_achievement_for_user(oid=oid, achievement_id=achievement_id)
+    except ProfileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.get("/api/achievements/by-organisation/{organisation}")
@@ -673,70 +613,22 @@ async def patch_achievement(
 ) -> dict[str, Any]:
     oid = authorize_and_get_oid(request)
     updates = model_to_partial_dict(payload)
-
-    if not updates:
-        raise HTTPException(status_code=400, detail="No fields provided for update")
-
-    set_clauses: list[str] = []
-    params: list[Any] = []
-
-    if "name" in updates:
-        value = (updates["name"] or "").strip()
-        if not value:
-            raise HTTPException(status_code=400, detail="name cannot be empty")
-        set_clauses.append("name = ?")
-        params.append(value)
-
-    if "link" in updates:
-        value = (updates["link"] or "").strip()
-        if not value:
-            raise HTTPException(status_code=400, detail="link cannot be empty")
-        set_clauses.append("link = ?")
-        params.append(value)
-
-    if "organisation" in updates:
-        value = (updates["organisation"] or "").strip()
-        if not value:
-            raise HTTPException(status_code=400, detail="organisation cannot be empty")
-        set_clauses.append("organisation = ?")
-        params.append(value)
-
-    if "date" in updates:
-        validate_date_text(updates["date"], "date")
-        set_clauses.append("date = ?")
-        params.append(updates["date"])
-
-    set_clauses.append("updated_at = CURRENT_TIMESTAMP")
-    params.extend([achievement_id, oid])
-
-    with get_db_connection() as conn:
-        cursor = conn.execute(
-            f"UPDATE achievements SET {', '.join(set_clauses)} WHERE id = ? AND oid = ?",
-            params,
-        )
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Achievement not found")
-        row = conn.execute(
-            "SELECT * FROM achievements WHERE id = ? AND oid = ?",
-            (achievement_id, oid),
-        ).fetchone()
-
-    return row_to_achievement(row)
+    try:
+        return update_achievement_for_user(oid=oid, achievement_id=achievement_id, updates=updates)
+    except ProfileValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ProfileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.delete("/api/achievements/{achievement_id}", status_code=204)
 @requires_auth
 async def delete_achievement(request: Request, achievement_id: int) -> None:
     oid = authorize_and_get_oid(request)
-
-    with get_db_connection() as conn:
-        cursor = conn.execute(
-            "DELETE FROM achievements WHERE id = ? AND oid = ?",
-            (achievement_id, oid),
-        )
-
-    if cursor.rowcount == 0:
-        raise HTTPException(status_code=404, detail="Achievement not found")
+    try:
+        delete_achievement_for_user(oid=oid, achievement_id=achievement_id)
+    except ProfileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 if __name__ == "__main__":

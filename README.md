@@ -79,6 +79,10 @@ SQLITE_DB_PATH=careersynth.db
 All endpoints below require a valid bearer token and scope check (`ENTRA_REQUIRED_SCOPE`).
 User isolation is enforced with `oid` claim from JWT.
 
+Swagger/OpenAPI:
+- `GET /docs` exposes an `Authorize` button with `BearerAuth` (JWT).
+- Use value format: `Bearer <access_token>`.
+
 Base resources:
 - `/api/projects`
 - `/api/experiences`
