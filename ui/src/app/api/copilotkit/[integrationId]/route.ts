@@ -27,7 +27,6 @@ const handleIntegrationRequest = async (
     req,
     integrationId,
     `/api/copilotkit/${integrationId}`,
-    accessToken,
   );
 };
 

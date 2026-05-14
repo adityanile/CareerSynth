@@ -27,12 +27,15 @@ function resolveIntegrationConfig(integrationId: string) {
 }
 
 type RuntimeHandler = (req: Request) => Response | Promise<Response>;
-type RuntimeHandlers = {
-  multiRoute: RuntimeHandler;
-  singleRoute: RuntimeHandler;
+type RuntimeCacheEntry = {
+  createdAt: number;
+  expiresAt: number;
+  handler: RuntimeHandler;
 };
 
-const runtimeHandlerCache = new Map<string, RuntimeHandlers>();
+const runtimeHandlerCache = new Map<string, RuntimeCacheEntry>();
+const HANDLER_TTL_MS = 5 * 60 * 1000;
+const MAX_RUNTIME_CACHE_ENTRIES = 200;
 
 function normalizePath(path: string): string {
   if (path.length > 1 && path.endsWith("/")) {
@@ -41,88 +44,75 @@ function normalizePath(path: string): string {
   return path;
 }
 
-function getRuntimeHandlers(
-  integrationId: string,
-  basePath: string,
-  accessToken?: string,
-): RuntimeHandlers {
-  const cacheKey = `${integrationId}::${basePath}`;
-  if (!accessToken) {
-    const existing = runtimeHandlerCache.get(cacheKey);
-    if (existing) {
-      return existing;
+function buildCacheKey(integrationId: string, basePath: string): string {
+  const normalizedBasePath = normalizePath(basePath);
+  return `${integrationId}::${normalizedBasePath}`;
+}
+
+function evictExpiredEntries(now: number) {
+  for (const [key, entry] of runtimeHandlerCache) {
+    if (entry.expiresAt <= now) {
+      runtimeHandlerCache.delete(key);
     }
+  }
+}
+
+function ensureCacheCapacity() {
+  if (runtimeHandlerCache.size <= MAX_RUNTIME_CACHE_ENTRIES) {
+    return;
+  }
+
+  const oldestEntry = runtimeHandlerCache.entries().next().value as
+    | [string, RuntimeCacheEntry]
+    | undefined;
+  if (oldestEntry) {
+    runtimeHandlerCache.delete(oldestEntry[0]);
+  }
+}
+
+function getRuntimeHandler(integrationId: string, basePath: string): RuntimeHandler {
+  const now = Date.now();
+  evictExpiredEntries(now);
+
+  const cacheKey = buildCacheKey(integrationId, basePath);
+  const existing = runtimeHandlerCache.get(cacheKey);
+  if (existing && existing.expiresAt > now) {
+    return existing.handler;
   }
 
   const { agentId, agentUrl } = resolveIntegrationConfig(integrationId);
-  const headers = accessToken
-    ? { Authorization: `Bearer ${accessToken}` }
-    : undefined;
   const serviceAdapter = new ExperimentalEmptyAdapter();
   const runtime = new CopilotRuntime({
     agents: {
-      [agentId]: new HttpAgent({ url: agentUrl, headers }),
+      [agentId]: new HttpAgent({ url: agentUrl }),
     },
   });
 
   runtime.handleServiceAdapter(serviceAdapter);
 
-  const multiRouteApp = createCopilotHonoHandler({
-    runtime: runtime.instance,
-    basePath,
-    mode: "multi-route",
-  });
-
-  const singleRouteApp = createCopilotHonoHandler({
+  const app = createCopilotHonoHandler({
     runtime: runtime.instance,
     basePath,
     mode: "single-route",
   });
 
-  const handlers = {
-    multiRoute: honoHandle(multiRouteApp),
-    singleRoute: honoHandle(singleRouteApp),
-  };
+  const handler = honoHandle(app);
 
-  if (!accessToken) {
-    runtimeHandlerCache.set(cacheKey, handlers);
-  }
+  runtimeHandlerCache.set(cacheKey, {
+    createdAt: now,
+    expiresAt: now + HANDLER_TTL_MS,
+    handler,
+  });
+  ensureCacheCapacity();
 
-  return handlers;
-}
-
-function shouldFallbackToSingleRoute(
-  req: NextRequest,
-  response: Response,
-  basePath: string,
-): boolean {
-  if (req.method.toUpperCase() !== "POST") {
-    return false;
-  }
-
-  if (response.status !== 404 && response.status !== 405) {
-    return false;
-  }
-
-  const requestPath = normalizePath(new URL(req.url).pathname);
-  const normalizedBasePath = normalizePath(basePath);
-
-  return requestPath === normalizedBasePath;
+  return handler;
 }
 
 export async function handleCopilotRuntimeRequest(
   req: NextRequest,
   integrationId: string,
   basePath: string,
-  accessToken?: string,
 ) {
-  const handlers = getRuntimeHandlers(integrationId, basePath, accessToken);
-  const singleRouteRequest = req.clone();
-  const response = await handlers.multiRoute(req);
-
-  if (shouldFallbackToSingleRoute(req, response, basePath)) {
-    return handlers.singleRoute(singleRouteRequest);
-  }
-
-  return response;
+  const handler = getRuntimeHandler(integrationId, basePath);
+  return handler(req);
 }

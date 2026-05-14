@@ -69,7 +69,87 @@ AZURE_STORAGE_CONTAINER_NAME=...
 ENTRA_TENANT_ID=...
 ENTRA_CLIENT_ID=...
 ENTRA_REQUIRED_SCOPE=User
+
+# Optional: SQLite path
+SQLITE_DB_PATH=careersynth.db
 ```
+
+## CRUD API (JWT Protected)
+
+All endpoints below require a valid bearer token and scope check (`ENTRA_REQUIRED_SCOPE`).
+User isolation is enforced with `oid` claim from JWT.
+
+Base resources:
+- `/api/projects`
+- `/api/experiences`
+- `/api/achievements`
+
+Shared operations:
+- `POST /api/<resource>` create
+- `GET /api/<resource>` list (user-scoped)
+- `GET /api/<resource>/{id}` get one (user-scoped)
+- `PATCH /api/<resource>/{id}` partial update (user-scoped)
+- `DELETE /api/<resource>/{id}` hard delete (user-scoped)
+
+Project-specific filters:
+- `GET /api/projects/by-tag/{tag}`
+- `GET /api/projects/by-tech/{tech}`
+- `GET /api/projects?tag=react`
+- `GET /api/projects?tags=react,fastapi` (requires all listed tags)
+- `GET /api/projects?tech=python`
+- `GET /api/projects?techs=python,fastapi` (requires all listed tech values)
+- `GET /api/projects?name=CareerSynth%20Platform`
+
+Experience-specific filters:
+- `GET /api/experiences?position=Software%20Engineer`
+- `GET /api/experiences/by-position/{position}`
+- `GET /api/experiences/by-company/{company_name}`
+
+Achievement-specific filters:
+- `GET /api/achievements?organisation=Microsoft`
+- `GET /api/achievements?name=Hackathon%20Winner`
+- `GET /api/achievements/by-organisation/{organisation}`
+- `GET /api/achievements/by-name/{name}`
+
+### Request Shapes
+
+`POST /api/projects`
+```json
+{
+  "name": "CareerSynth Platform",
+  "techStack": ["FastAPI", "SQLite", "Next.js"],
+  "urls": ["https://example.com"],
+  "description": "Resume platform backend",
+  "tags": ["backend", "api"],
+  "summary": "Built a secure multi-tenant CRUD API"
+}
+```
+
+`POST /api/experiences`
+```json
+{
+  "companyName": "Acme Corp",
+  "startDate": "10-01-2024",
+  "endDate": null,
+  "position": "Backend Engineer",
+  "description": "Built scalable services",
+  "location": "Bengaluru"
+}
+```
+
+`POST /api/achievements`
+```json
+{
+  "name": "Hackathon Winner",
+  "link": "https://example.com/certificate",
+  "organisation": "Acme",
+  "date": "01-12-2025"
+}
+```
+
+Date format validation:
+- `startDate`, `endDate`, and `date` must use `DD-MM-YYYY`.
+- `endDate` can be `null` for ongoing roles.
 
 ## Local Backend Setup
 
@@ -97,6 +177,20 @@ python server.py
 
 Backend starts on:
 - `http://0.0.0.0:8888/`
+
+## API Smoke Test
+
+After backend is running, execute the CRUD smoke test:
+
+```bash
+TOKEN="<jwt_access_token>" ./smoke_test_api.sh
+```
+
+Optional:
+- `BASE_URL=http://localhost:8888` (default)
+
+Prerequisite:
+- `jq` installed (used for response parsing)
 
 ## CLI Compile/Upload (without agent)
 
