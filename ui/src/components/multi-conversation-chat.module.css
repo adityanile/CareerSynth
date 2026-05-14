@@ -463,6 +463,47 @@
   width: 100%;
 }
 
+.toolCallRenderCard {
+  background: #f8fafc;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0;
+  padding: 8px 10px;
+}
+
+.toolCallRenderToggle {
+  align-items: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.toolCallRenderTitle {
+  color: #1e3a8a;
+  font-size: 0.73rem;
+  font-weight: 700;
+}
+
+.toolCallRenderChevron {
+  color: #1e3a8a;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.toolCallRenderBody {
+  color: #1f2937;
+  font-size: 0.73rem;
+  line-height: 1.35;
+}
+
 @media (max-width: 1024px) {
   .layout {
     grid-template-columns: 1fr;

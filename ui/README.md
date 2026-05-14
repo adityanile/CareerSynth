@@ -7,6 +7,8 @@ It includes:
 - Copilot Runtime API route (`/api/copilotkit/:integrationId`) that proxies to your AG-UI agent
 - Chat interface with `CopilotChat`
 - Thread sidebar using `useThreads` (select/new/rename/archive + pagination)
+- Shared resume state panel (projects, experiences, achievements) rendered from AG-UI state
+- In-app shared-state editing from frontend via `useAgent(...).agent.setState(...)` (add/edit/delete)
 - Persistent thread support when configured with Copilot Cloud/Intelligence public key
 
 ## 1. Configure environment
@@ -56,11 +58,31 @@ npm run dev
 
 Open `http://localhost:3000` (it redirects to `/<COPILOT_DEFAULT_INTEGRATION_ID>`).
 
-## 3. Architecture
+## 3. Shared Resume State Contract
+
+The UI expects the AG-UI state shape:
+
+```json
+{
+  "projects": [],
+  "experiences": [],
+  "achievements": []
+}
+```
+
+Current backend pattern (in `server.py` + `resume_state_tools.py`) uses:
+
+- `add_project_to_resume` with argument `project`
+- `add_experience_to_resume` with argument `experience`
+- `add_achievement_to_resume` with argument `achievement`
+
+These tools append list items to backend-maintained shared state and stream updates via AG-UI.
+
+## 4. Architecture
 
 - `src/app/api/copilotkit/[integrationId]/route.ts`: Copilot Runtime + `HttpAgent` bridge to AG-UI.
 - `src/components/agentic-chat.tsx`: CopilotKit provider with dynamic runtime URL (`/api/copilotkit/${integrationId}`).
-- `src/components/multi-conversation-chat.tsx`: thread sidebar and chat panel.
+- `src/components/multi-conversation-chat.tsx`: thread sidebar, chat panel, and shared-state editor panel.
 
 ## Notes
 

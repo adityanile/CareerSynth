@@ -1,7 +1,13 @@
 "use client";
 
 import { FormEvent, ReactNode, useState } from "react";
-import { CopilotChat, Thread, useAgent, useThreads } from "@copilotkit/react-core/v2";
+import {
+  CopilotChat,
+  Thread,
+  useAgent,
+  useRenderTool,
+  useThreads,
+} from "@copilotkit/react-core/v2";
 import styles from "./multi-conversation-chat.module.css";
 
 const THREAD_PAGE_SIZE = 25;
@@ -102,6 +108,7 @@ export function MultiConversationChat({
 function SingleSessionChat({ agentId }: { agentId: string }) {
   return (
     <main className={styles.singleSession}>
+      <ToolCallRenderers agentId={agentId} />
       <div className={styles.chatBody}>
         <div className={styles.chatWorkspace}>
           <ResumeStatePanel agentId={agentId} />
@@ -200,6 +207,7 @@ function MultiSessionChat({ agentId }: { agentId: string }) {
 
   return (
     <div className={styles.layout}>
+      <ToolCallRenderers agentId={agentId} />
       <aside className={styles.sidebar}>
         <div className={styles.sidebarHeader}>
           <div>
@@ -923,4 +931,144 @@ function splitCsv(value: string): string[] {
     .split(",")
     .map((part) => part.trim())
     .filter(Boolean);
+}
+
+function ToolCallRenderers({ agentId }: { agentId: string }) {
+  useRenderTool(
+    {
+      name: "*",
+      agentId,
+      render: ({ name, status, parameters, result, toolCallId }) => {
+        const summary = summarizeToolCall(name, status, parameters, result);
+        return (
+          <ToolRenderDisclosure
+            toolCallId={toolCallId}
+            title={summary.title}
+            body={summary.body}
+          />
+        );
+      },
+    },
+    [agentId],
+  );
+
+  return null;
+}
+
+function summarizeToolCall(
+  name: string,
+  status: "inProgress" | "executing" | "complete",
+  parameters: unknown,
+  result: string | undefined,
+): { title: string; body: string } {
+  const statusPrefix =
+    status === "complete"
+      ? "Completed"
+      : status === "executing"
+        ? "Running"
+        : "Preparing";
+
+  if (name === "add_project_to_resume") {
+    const payload = asRecord(parameters);
+    const project = asRecord(payload.project);
+    const projectName = asString(project.projectName) ?? "project";
+    return {
+      title: `${statusPrefix}: add_project_to_resume`,
+      body:
+        status === "complete"
+          ? `Added project "${projectName}" to shared resume state.`
+          : `Updating shared state for project "${projectName}".`,
+    };
+  }
+
+  if (name === "add_experience_to_resume") {
+    const payload = asRecord(parameters);
+    const experience = asRecord(payload.experience);
+    const companyName = asString(experience.companyName) ?? "company";
+    const position = asString(experience.position) ?? "role";
+    return {
+      title: `${statusPrefix}: add_experience_to_resume`,
+      body:
+        status === "complete"
+          ? `Added experience "${position} @ ${companyName}" to shared resume state.`
+          : `Updating shared state for experience "${position} @ ${companyName}".`,
+    };
+  }
+
+  if (name === "add_achievement_to_resume") {
+    const payload = asRecord(parameters);
+    const achievement = asRecord(payload.achievement);
+    const achievementName = asString(achievement.name) ?? "achievement";
+    return {
+      title: `${statusPrefix}: add_achievement_to_resume`,
+      body:
+        status === "complete"
+          ? `Added achievement "${achievementName}" to shared resume state.`
+          : `Updating shared state for achievement "${achievementName}".`,
+    };
+  }
+
+  if (status === "complete") {
+    const normalizedResult = result?.trim();
+    return {
+      title: `${statusPrefix}: ${name}`,
+      body: normalizedResult || "Tool call completed.",
+    };
+  }
+
+  return {
+    title: `${statusPrefix}: ${name}`,
+    body: `Executing ${name} with ${summarizeParameters(parameters)}.`,
+  };
+}
+
+function summarizeParameters(parameters: unknown): string {
+  if (!parameters || typeof parameters !== "object") {
+    return "no parameters";
+  }
+  const entries = Object.entries(parameters as Record<string, unknown>);
+  if (entries.length === 0) {
+    return "no parameters";
+  }
+  const keys = entries.map(([key]) => key);
+  return `${keys.slice(0, 3).join(", ")}${keys.length > 3 ? "..." : ""}`;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function asString(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed || undefined;
+}
+
+function ToolRenderDisclosure({
+  toolCallId,
+  title,
+  body,
+}: {
+  toolCallId: string;
+  title: string;
+  body: string;
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div className={styles.toolCallRenderCard} key={toolCallId}>
+      <button
+        type="button"
+        className={styles.toolCallRenderToggle}
+        onClick={() => setIsExpanded((value) => !value)}
+        aria-expanded={isExpanded}
+      >
+        <span className={styles.toolCallRenderTitle}>{title}</span>
+        <span className={styles.toolCallRenderChevron}>{isExpanded ? "▲" : "▼"}</span>
+      </button>
+      {isExpanded && <p className={styles.toolCallRenderBody}>{body}</p>}
+    </div>
+  );
 }
