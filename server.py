@@ -2,6 +2,7 @@ import os
 import sqlite3
 from collections.abc import AsyncGenerator
 from typing import Any, Optional
+import json
 
 from dotenv import load_dotenv
 from agent_framework import Agent
@@ -17,7 +18,12 @@ from agent_profile_tools import (
     query_experiences_from_context_tool,
 )
 from agent_project_tools import create_project_from_context_tool, query_projects_from_context_tool
-from agent_request_context import reset_current_oid, set_current_oid
+from agent_request_context import (
+    reset_current_oid,
+    reset_current_thread_id,
+    set_current_oid,
+    set_current_thread_id,
+)
 from models import (
     AchievementCreate,
     AchievementPatch,
@@ -185,11 +191,27 @@ async def agui_auth_context(request: Request) -> AsyncGenerator[None, None]:
         raise HTTPException(status_code=401, detail="Missing Authorization header")
 
     oid = authorize_and_get_oid(request)
-    token = set_current_oid(oid)
+    thread_id = "default"
+    try:
+        raw_body = await request.body()
+        if raw_body:
+            payload = json.loads(raw_body)
+            if isinstance(payload, dict):
+                thread_id_value = payload.get("thread_id") or payload.get("threadId")
+                if thread_id_value is not None:
+                    normalized_thread_id = str(thread_id_value).strip()
+                    if normalized_thread_id:
+                        thread_id = normalized_thread_id
+    except Exception:
+        thread_id = "default"
+
+    oid_token = set_current_oid(oid)
+    thread_id_token = set_current_thread_id(thread_id)
     try:
         yield
     finally:
-        reset_current_oid(token)
+        reset_current_thread_id(thread_id_token)
+        reset_current_oid(oid_token)
 
 
 add_agent_framework_fastapi_endpoint(

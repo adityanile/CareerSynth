@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+from threading import Lock
 from typing import Any
 
 from agent_framework import tool
 from agent_framework.ag_ui import state_update
 
-from agent_request_context import require_current_oid
+from agent_request_context import require_current_oid, require_current_thread_id
 
-resume_state_cache: dict[str, dict[str, Any]] = {}
+CacheKey = tuple[str, str]
+
+resume_state_cache: dict[CacheKey, dict[str, Any]] = {}
+resume_state_locks: dict[CacheKey, Lock] = {}
+resume_state_locks_guard = Lock()
 
 
 def _empty_resume_state_payload() -> dict[str, Any]:
@@ -38,8 +43,21 @@ def _normalize_string_list(value: Any) -> list[str]:
     return []
 
 
-def _get_cached_resume_state(oid: str) -> dict[str, Any]:
-    cached_state = resume_state_cache.get(oid, _empty_resume_state_payload())
+def _cache_key(oid: str, thread_id: str) -> CacheKey:
+    return (oid, thread_id)
+
+
+def _get_lock_for_cache_key(key: CacheKey) -> Lock:
+    with resume_state_locks_guard:
+        lock = resume_state_locks.get(key)
+        if lock is None:
+            lock = Lock()
+            resume_state_locks[key] = lock
+        return lock
+
+
+def _get_cached_resume_state(key: CacheKey) -> dict[str, Any]:
+    cached_state = resume_state_cache.get(key, _empty_resume_state_payload())
     projects = cached_state.get("projects")
     experiences = cached_state.get("experiences")
     achievements = cached_state.get("achievements")
@@ -50,12 +68,14 @@ def _get_cached_resume_state(oid: str) -> dict[str, Any]:
     }
 
 
-def _append_to_state_list(oid: str, key: str, item: dict[str, Any]) -> list[dict[str, Any]]:
-    state_payload = _get_cached_resume_state(oid)
-    updated_list = [*state_payload[key], item]
-    state_payload[key] = updated_list
-    resume_state_cache[oid] = state_payload
-    return updated_list
+def _append_to_state_list(cache_key: CacheKey, key: str, item: dict[str, Any]) -> list[dict[str, Any]]:
+    lock = _get_lock_for_cache_key(cache_key)
+    with lock:
+        state_payload = _get_cached_resume_state(cache_key)
+        updated_list = [*state_payload[key], item]
+        state_payload[key] = updated_list
+        resume_state_cache[cache_key] = state_payload
+        return updated_list
 
 
 @tool(
@@ -79,7 +99,8 @@ def add_project_to_resume_tool(project: dict[str, Any] | None = None) -> Any:
     }
 
     oid = require_current_oid()
-    updated_projects = _append_to_state_list(oid, "projects", project_record)
+    thread_id = require_current_thread_id()
+    updated_projects = _append_to_state_list(_cache_key(oid, thread_id), "projects", project_record)
     return state_update(
         text=f"Added project '{project_record['name']}' to shared resume state list.",
         state={"projects": updated_projects},
@@ -107,7 +128,12 @@ def add_experience_to_resume_tool(experience: dict[str, Any] | None = None) -> A
     }
 
     oid = require_current_oid()
-    updated_experiences = _append_to_state_list(oid, "experiences", experience_record)
+    thread_id = require_current_thread_id()
+    updated_experiences = _append_to_state_list(
+        _cache_key(oid, thread_id),
+        "experiences",
+        experience_record,
+    )
     return state_update(
         text=(
             f"Added experience '{experience_record['position']} @ "
@@ -139,7 +165,12 @@ def add_achievement_to_resume_tool(achievement: dict[str, Any] | None = None) ->
     }
 
     oid = require_current_oid()
-    updated_achievements = _append_to_state_list(oid, "achievements", achievement_record)
+    thread_id = require_current_thread_id()
+    updated_achievements = _append_to_state_list(
+        _cache_key(oid, thread_id),
+        "achievements",
+        achievement_record,
+    )
     return state_update(
         text=f"Added achievement '{achievement_record['name']}' to shared resume state list.",
         state={"achievements": updated_achievements},

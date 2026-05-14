@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, ReactNode, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useState } from "react";
 import { CopilotChat, Thread, useAgent, useThreads } from "@copilotkit/react-core/v2";
 import styles from "./multi-conversation-chat.module.css";
 
@@ -102,22 +102,18 @@ export function MultiConversationChat({
 function SingleSessionChat({ agentId }: { agentId: string }) {
   return (
     <main className={styles.singleSession}>
-      <header className={styles.chatHeader}>
-        <h2>Conversation</h2>
-        <p className={styles.headerNotice}>
-          Add a Copilot public key to enable multi-conversation history.
-        </p>
-      </header>
       <div className={styles.chatBody}>
         <div className={styles.chatWorkspace}>
           <ResumeStatePanel agentId={agentId} />
-          <CopilotChat
-            agentId={agentId}
-            chatView={styles.chatView}
-            labels={{
-              chatInputPlaceholder: "Ask your agent anything...",
-            }}
-          />
+          <div className={styles.chatPane}>
+            <CopilotChat
+              agentId={agentId}
+              chatView={styles.chatView}
+              labels={{
+                chatInputPlaceholder: "Ask your agent anything...",
+              }}
+            />
+          </div>
         </div>
       </div>
     </main>
@@ -143,11 +139,6 @@ function MultiSessionChat({ agentId }: { agentId: string }) {
     agentId,
     limit: THREAD_PAGE_SIZE,
   });
-
-  const activeThread = useMemo(
-    () => threads.find((thread) => thread.id === activeThreadId),
-    [activeThreadId, threads],
-  );
 
   const startNewConversation = () => {
     setActiveThreadId(undefined);
@@ -324,20 +315,19 @@ function MultiSessionChat({ agentId }: { agentId: string }) {
       </aside>
 
       <main className={styles.chatPanel}>
-        <header className={styles.chatHeader}>
-          <h2>{activeThread?.name ?? "New conversation"}</h2>
-        </header>
         <div className={styles.chatBody}>
           <div className={styles.chatWorkspace}>
             <ResumeStatePanel agentId={agentId} />
-            <CopilotChat
-              agentId={agentId}
-              threadId={activeThreadId}
-              chatView={styles.chatView}
-              labels={{
-                chatInputPlaceholder: "Ask your agent anything...",
-              }}
-            />
+            <div className={styles.chatPane}>
+              <CopilotChat
+                agentId={agentId}
+                threadId={activeThreadId}
+                chatView={styles.chatView}
+                labels={{
+                  chatInputPlaceholder: "Ask your agent anything...",
+                }}
+              />
+            </div>
           </div>
         </div>
       </main>
