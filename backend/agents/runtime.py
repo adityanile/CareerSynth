@@ -1,6 +1,7 @@
 import json
 from collections.abc import AsyncGenerator
 from pathlib import Path
+from typing import Any
 
 from agent_framework import Agent, SkillsProvider
 from agent_framework.ag_ui import AgentFrameworkAgent, add_agent_framework_fastapi_endpoint
@@ -19,7 +20,9 @@ from agents.tools.agent_project_tools import (
     create_project_from_context_tool,
     query_projects_from_context_tool,
 )
+from agents.tools.mem0_retrieve_tool import retrieve_from_mem0_tool
 from agents.context import (
+    require_current_oid,
     reset_current_oid,
     reset_current_thread_id,
     set_current_oid,
@@ -39,6 +42,11 @@ from agents.tools.resume_state_tools import (
     add_project_to_resume_tool,
 )
 from agents.middleware.tool_call_sequence_middleware import ToolCallSequenceRepairMiddleware
+
+try:
+    from agent_framework.mem0 import Mem0ContextProvider
+except Exception:
+    Mem0ContextProvider = None
 
 
 MAIN_AGENT_INSTRUCTIONS = """
@@ -66,6 +74,9 @@ Tool usage rules:
 - Handle experience queries with `query_experiences`.
 - Handle achievement queries with `query_achievements`.
 - Handle education queries with `query_educations`.
+- For user questions about their own background data (projects, experience, achievements, education), always call the matching `query_*` tool and always call `retrieve` in the same turn before answering, regardless of whether `query_*` returned data.
+- For user-history or preference recall questions ("what do you know about me", "what did I tell you before"), call `retrieve` first.
+- If you are uncertain about any user-specific fact, preference, history, goals, or profile detail needed to answer, call `retrieve` before responding.
 - Before answering questions about the user's profile, interests, strengths, fit, or recommendations, decide which profile query tools are needed and call them first.
 - Do not answer user-specific background/career-fit questions from assumptions or generic memory when relevant query tools exist.
 - For broad recommendation questions (for example: best career options for me), call all relevant query tools first:
@@ -79,6 +90,8 @@ Tool usage rules:
   - achievements-based question -> `query_achievements`
   - education-based question -> `query_educations`
 - If query tool results are empty or insufficient, explicitly say what data is missing and ask a targeted follow-up instead of replying "I don't know".
+- Never say "I don't know", "I am not sure", or equivalent uncertainty until after you have tried relevant query tool(s) and `retrieve`.
+- If both domain query tool(s) and `retrieve` are relevant, call domain query tool(s) first, then call `retrieve` before finalizing the response.
 - Never ask the user for `oid` for these operations. It is injected from authenticated request context.
 - Do not claim an operation succeeded unless the corresponding tool call succeeds.
 
@@ -141,6 +154,19 @@ PREDICTED_STATE_CONFIG: dict[str, dict[str, str | None]] = {
 }
 
 
+if Mem0ContextProvider is not None:
+    class OidScopedMem0ContextProvider(Mem0ContextProvider):
+        """Scope mem0 memory to the authenticated user id for each request run."""
+
+        async def before_run(self, **kwargs: Any) -> None:
+            # Intentionally disabled: memory retrieval is handled explicitly via `retrieve` tool.
+            return None
+
+        async def after_run(self, **kwargs: Any) -> None:
+            self.user_id = require_current_oid()
+            await super().after_run(**kwargs)
+
+
 def _build_openai_client() -> OpenAIChatCompletionClient:
     settings = get_settings()
     return OpenAIChatCompletionClient(
@@ -151,16 +177,25 @@ def _build_openai_client() -> OpenAIChatCompletionClient:
 
 
 def _build_agent_framework_agent() -> AgentFrameworkAgent:
+    settings = get_settings()
     skills_provider = SkillsProvider.from_paths(
         skill_paths=str(Path(__file__).parent / "skills"),
     )
+    context_providers: list[Any] = [skills_provider]
+    if Mem0ContextProvider is not None:
+        mem0_provider = OidScopedMem0ContextProvider(
+            source_id="mem0",
+            api_key=settings.mem0_api_key,
+            application_id=settings.mem0_application_id,
+        )
+        context_providers.append(mem0_provider)
 
     agent = Agent(
         client=_build_openai_client(),
         instructions=MAIN_AGENT_INSTRUCTIONS,
         name="main",
         middleware=[ToolCallSequenceRepairMiddleware()],
-        context_providers=[skills_provider],
+        context_providers=context_providers,
         tools=[
             generate_resume_pdf,
             add_project_to_resume_tool,
@@ -178,6 +213,7 @@ def _build_agent_framework_agent() -> AgentFrameworkAgent:
             query_achievements_from_context_tool,
             create_education_from_context_tool,
             query_educations_from_context_tool,
+            retrieve_from_mem0_tool,
         ],
     )
 

@@ -19,6 +19,8 @@ class Settings:
     azure_openai_deployment: str | None
     azure_openai_endpoint: str | None
     azure_openai_api_key: str | None
+    mem0_api_key: str | None
+    mem0_application_id: str | None
 
 
 @lru_cache(maxsize=1)
@@ -42,5 +44,6 @@ def get_settings() -> Settings:
         azure_openai_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT"),
         azure_openai_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
         azure_openai_api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+        mem0_api_key=os.getenv("MEM0_API_KEY"),
+        mem0_application_id=os.getenv("MEM0_APPLICATION_ID", "careersynth-main-agent"),
     )
-

@@ -556,6 +556,14 @@ export function ProfileResourceManager() {
     }
   };
 
+  const openWithRefresh = () => {
+    if (!accessToken) {
+      return;
+    }
+    setIsOpen(true);
+    void loadAllResources(accessToken);
+  };
+
   if (!accessToken) {
     return null;
   }
@@ -565,7 +573,7 @@ export function ProfileResourceManager() {
       <button
         type="button"
         className={styles.launcher}
-        onClick={() => setIsOpen(true)}
+        onClick={openWithRefresh}
       >
         CareerSynth Database State
         <span className={styles.badge}>{totalItems}</span>
