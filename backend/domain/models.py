@@ -47,6 +47,15 @@ class EducationState(BaseModel):
     updatedAt: str
 
 
+class ResumeRecordState(BaseModel):
+    id: int
+    resumeName: str
+    resumeDescription: str
+    resume: str
+    createdOn: str
+    updatedAt: str
+
+
 class ProfileState(BaseModel):
     name: str = ""
     role: str = ""
@@ -128,3 +137,15 @@ class EducationPatch(BaseModel):
     startYear: Optional[str] = None
     endYear: Optional[str] = None
     cgpaOrPercentage: Optional[str] = None
+
+
+class ResumeCreate(BaseModel):
+    resumeName: str
+    resumeDescription: str
+    resume: str
+
+
+class ResumePatch(BaseModel):
+    resumeName: Optional[str] = None
+    resumeDescription: Optional[str] = None
+    resume: Optional[str] = None

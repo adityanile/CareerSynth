@@ -133,6 +133,17 @@ def _row_to_education(row: sqlite3.Row) -> dict[str, Any]:
     }
 
 
+def _row_to_resume(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "resumeName": row["resume_name"],
+        "resumeDescription": row["resume_description"],
+        "resume": row["resume"],
+        "createdOn": row["created_on"],
+        "updatedAt": row["updated_at"],
+    }
+
+
 def _list_rows_for_oid(
     *,
     table: str,
@@ -398,6 +409,18 @@ def list_educations_for_user(
     return [_row_to_education(row) for row in rows]
 
 
+def list_resumes_for_user(
+    oid: str,
+    resume_name: Optional[str] = None,
+) -> list[dict[str, Any]]:
+    rows = _list_rows_for_oid(
+        table="resumes",
+        oid=oid,
+        filters={"resume_name": resume_name},
+    )
+    return [_row_to_resume(row) for row in rows]
+
+
 def create_experience_for_user(
     oid: str,
     company_name: str,
@@ -590,6 +613,42 @@ def create_education_for_user(
     return _row_to_education(row)
 
 
+def create_resume_for_user(
+    oid: str,
+    resume_name: str,
+    resume_description: str,
+    resume: str,
+) -> dict[str, Any]:
+    normalized_resume_name = resume_name.strip()
+    normalized_resume_description = resume_description.strip()
+    normalized_resume = resume.strip()
+
+    if not normalized_resume_name or not normalized_resume_description or not normalized_resume:
+        raise ProfileValidationError("resumeName, resumeDescription and resume are required")
+
+    with _get_db_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO resumes (oid, user_reference, resume_name, resume_description, resume)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                oid,
+                oid,
+                normalized_resume_name,
+                normalized_resume_description,
+                normalized_resume,
+            ),
+        )
+        resume_id = cursor.lastrowid
+        row = conn.execute(
+            "SELECT * FROM resumes WHERE id = ? AND oid = ?",
+            (resume_id, oid),
+        ).fetchone()
+
+    return _row_to_resume(row)
+
+
 def get_achievement_for_user(oid: str, achievement_id: int) -> dict[str, Any]:
     row = _fetch_row_by_id_for_oid(
         table="achievements",
@@ -608,6 +667,16 @@ def get_education_for_user(oid: str, education_id: int) -> dict[str, Any]:
         not_found_message="Education not found",
     )
     return _row_to_education(row)
+
+
+def get_resume_for_user(oid: str, resume_id: int) -> dict[str, Any]:
+    row = _fetch_row_by_id_for_oid(
+        table="resumes",
+        row_id=resume_id,
+        oid=oid,
+        not_found_message="Resume not found",
+    )
+    return _row_to_resume(row)
 
 
 def update_achievement_for_user(
@@ -708,6 +777,49 @@ def update_education_for_user(
     return _row_to_education(row)
 
 
+def update_resume_for_user(
+    oid: str,
+    resume_id: int,
+    updates: dict[str, Any],
+) -> dict[str, Any]:
+    if not updates:
+        raise ProfileValidationError("No fields provided for update")
+
+    set_clauses: list[str] = []
+    params: list[Any] = []
+
+    if "resumeName" in updates:
+        set_clauses.append("resume_name = ?")
+        params.append(_require_non_empty_text(updates["resumeName"], "resumeName"))
+
+    if "resumeDescription" in updates:
+        set_clauses.append("resume_description = ?")
+        params.append(_require_non_empty_text(updates["resumeDescription"], "resumeDescription"))
+
+    if "resume" in updates:
+        set_clauses.append("resume = ?")
+        params.append(_require_non_empty_text(updates["resume"], "resume"))
+
+    if not set_clauses:
+        raise ProfileValidationError("No valid fields provided for update")
+
+    set_clauses.append("updated_at = CURRENT_TIMESTAMP")
+    params.extend([resume_id, oid])
+
+    with _get_db_connection() as conn:
+        cursor = conn.execute(
+            f"UPDATE resumes SET {', '.join(set_clauses)} WHERE id = ? AND oid = ?",
+            params,
+        )
+        if cursor.rowcount == 0:
+            raise ProfileNotFoundError("Resume not found")
+        row = conn.execute(
+            "SELECT * FROM resumes WHERE id = ? AND oid = ?",
+            (resume_id, oid),
+        ).fetchone()
+    return _row_to_resume(row)
+
+
 def delete_achievement_for_user(oid: str, achievement_id: int) -> None:
     _delete_row_by_id_for_oid(
         table="achievements",
@@ -723,4 +835,13 @@ def delete_education_for_user(oid: str, education_id: int) -> None:
         row_id=education_id,
         oid=oid,
         not_found_message="Education not found",
+    )
+
+
+def delete_resume_for_user(oid: str, resume_id: int) -> None:
+    _delete_row_by_id_for_oid(
+        table="resumes",
+        row_id=resume_id,
+        oid=oid,
+        not_found_message="Resume not found",
     )

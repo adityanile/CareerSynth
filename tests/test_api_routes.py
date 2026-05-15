@@ -234,6 +234,111 @@ def test_educations_crud_and_filters(client, oid_headers):
     assert missing_res.status_code == 404
 
 
+def test_resumes_crud_and_filters(client, oid_headers):
+    payload = {
+        "resumeName": "Backend Resume",
+        "resumeDescription": "ATS optimized for backend roles",
+        "resume": "\\documentclass{article}\\begin{document}Backend\\end{document}",
+    }
+    create_res = client.post("/api/resumes", json=payload, headers=oid_headers("user-1"))
+    assert create_res.status_code == 201
+    resume_id = create_res.json()["id"]
+
+    res = client.get("/api/resumes", headers=oid_headers("user-1"))
+    assert res.status_code == 200
+    assert any(item["id"] == resume_id for item in res.json()["items"])
+
+    res = client.get("/api/resumes?resume_name=Backend%20Resume", headers=oid_headers("user-1"))
+    assert res.status_code == 200
+    assert any(item["id"] == resume_id for item in res.json()["items"])
+
+    res = client.get(f"/api/resumes/{resume_id}", headers=oid_headers("user-1"))
+    assert res.status_code == 200
+    assert res.json()["resumeName"] == "Backend Resume"
+    assert "userReference" not in res.json()
+
+    patch_res = client.patch(
+        f"/api/resumes/{resume_id}",
+        json={"resumeDescription": "Updated description"},
+        headers=oid_headers("user-1"),
+    )
+    assert patch_res.status_code == 200
+    assert patch_res.json()["resumeDescription"] == "Updated description"
+
+    delete_res = client.delete(f"/api/resumes/{resume_id}", headers=oid_headers("user-1"))
+    assert delete_res.status_code == 204
+
+    missing_res = client.get(f"/api/resumes/{resume_id}", headers=oid_headers("user-1"))
+    assert missing_res.status_code == 404
+
+
+def test_resumes_are_isolated_by_oid(client, oid_headers):
+    payload = {
+        "resumeName": "Private Resume",
+        "resumeDescription": "Private",
+        "resume": "\\documentclass{article}\\begin{document}Private\\end{document}",
+    }
+    create_res = client.post("/api/resumes", json=payload, headers=oid_headers("user-a"))
+    assert create_res.status_code == 201
+    resume_id = create_res.json()["id"]
+
+    forbidden_read = client.get(f"/api/resumes/{resume_id}", headers=oid_headers("user-b"))
+    assert forbidden_read.status_code == 404
+
+    forbidden_delete = client.delete(f"/api/resumes/{resume_id}", headers=oid_headers("user-b"))
+    assert forbidden_delete.status_code == 404
+
+
+def test_resume_delete_calls_blob_cleanup(client, oid_headers, monkeypatch):
+    from api.routes import resumes as resumes_route
+
+    called: dict[str, str] = {}
+
+    def _fake_delete_resume_blob_if_needed(blob_url: str) -> None:
+        called["blob_url"] = blob_url
+
+    monkeypatch.setattr(resumes_route, "_delete_resume_blob_if_needed", _fake_delete_resume_blob_if_needed)
+
+    payload = {
+        "resumeName": "Blob Resume",
+        "resumeDescription": "Stored in blob",
+        "resume": "https://example.blob.core.windows.net/container/file.pdf",
+    }
+    create_res = client.post("/api/resumes", json=payload, headers=oid_headers("user-1"))
+    assert create_res.status_code == 201
+    resume_id = create_res.json()["id"]
+
+    delete_res = client.delete(f"/api/resumes/{resume_id}", headers=oid_headers("user-1"))
+    assert delete_res.status_code == 204
+    assert called["blob_url"] == "https://example.blob.core.windows.net/container/file.pdf"
+
+
+def test_resume_delete_returns_502_if_blob_cleanup_fails(client, oid_headers, monkeypatch):
+    from api.routes import resumes as resumes_route
+
+    def _failing_delete_resume_blob_if_needed(blob_url: str) -> None:
+        raise RuntimeError("blob delete failed")
+
+    monkeypatch.setattr(resumes_route, "_delete_resume_blob_if_needed", _failing_delete_resume_blob_if_needed)
+
+    payload = {
+        "resumeName": "Blob Resume",
+        "resumeDescription": "Stored in blob",
+        "resume": "https://example.blob.core.windows.net/container/file.pdf",
+    }
+    create_res = client.post("/api/resumes", json=payload, headers=oid_headers("user-1"))
+    assert create_res.status_code == 201
+    resume_id = create_res.json()["id"]
+
+    delete_res = client.delete(f"/api/resumes/{resume_id}", headers=oid_headers("user-1"))
+    assert delete_res.status_code == 502
+    assert "Failed to delete resume blob" in delete_res.json()["detail"]
+
+    # Record should remain when blob cleanup fails.
+    get_res = client.get(f"/api/resumes/{resume_id}", headers=oid_headers("user-1"))
+    assert get_res.status_code == 200
+
+
 def test_missing_oid_claim_returns_401(client):
     res = client.get("/api/projects")
     assert res.status_code == 401

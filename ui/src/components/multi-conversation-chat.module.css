@@ -288,15 +288,15 @@
   padding: 2px 8px;
 }
 
-.stateGrid > .stateCard:nth-child(1) {
+.stateGrid > .stateCard:nth-child(3n + 1) {
   border-left: 4px solid #2563eb;
 }
 
-.stateGrid > .stateCard:nth-child(2) {
+.stateGrid > .stateCard:nth-child(3n + 2) {
   border-left: 4px solid #0891b2;
 }
 
-.stateGrid > .stateCard:nth-child(3) {
+.stateGrid > .stateCard:nth-child(3n) {
   border-left: 4px solid #7c3aed;
 }
 

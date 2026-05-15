@@ -15,6 +15,15 @@ def _install_stub_modules(monkeypatch: pytest.MonkeyPatch) -> None:
             self.args = args
             self.kwargs = kwargs
 
+    class DummySkillsProvider:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.kwargs = kwargs
+
+        @classmethod
+        def from_paths(cls, *args, **kwargs):
+            return cls(*args, **kwargs)
+
     class ChatContext:
         def __init__(self):
             self.messages = []
@@ -39,6 +48,7 @@ def _install_stub_modules(monkeypatch: pytest.MonkeyPatch) -> None:
         return fn
 
     agent_framework.Agent = DummyAgent
+    agent_framework.SkillsProvider = DummySkillsProvider
     agent_framework.ChatContext = ChatContext
     agent_framework.ChatMiddleware = ChatMiddleware
     agent_framework.Message = Message

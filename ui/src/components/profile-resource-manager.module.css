@@ -150,6 +150,16 @@
   padding: 8px;
 }
 
+.resumeSelect {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  display: block;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
 .itemTitle {
   color: #0f172a;
   font-size: 0.75rem;

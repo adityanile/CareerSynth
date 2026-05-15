@@ -4,12 +4,15 @@ import shutil
 import subprocess
 import tempfile
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
 from agent_framework import tool
 from azure.storage.blob import BlobServiceClient, ContentSettings
+from agents.context import require_current_oid
 from agents.tools.tool_response import format_tool_failure
+from domain.repository import create_resume_for_user
 
 COMPILE_TIMEOUT_SECONDS = 45
 MAX_ERROR_CHARS = 4000
@@ -208,9 +211,39 @@ def _upload_pdf_to_blob(pdf_bytes: bytes, blob_name: str) -> str:
     return blob_client.url
 
 
+def _build_default_resume_name(latex_code: str) -> str:
+    name_match = re.search(r"\\textbf\{([^{}]+)\}", latex_code)
+    if name_match:
+        extracted_name = name_match.group(1).strip()
+        if extracted_name:
+            return f"{extracted_name} Resume"
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return f"Generated Resume {timestamp}"
+
+
+def _persist_generated_resume(
+    *,
+    latex_code: str,
+    blob_url: str,
+    resume_name: str,
+    resume_description: str,
+) -> None:
+    resolved_name = (resume_name or "").strip() or _build_default_resume_name(latex_code)
+    resolved_description = (resume_description or "").strip() or "Auto-saved after successful PDF generation."
+    oid = require_current_oid()
+    create_resume_for_user(
+        oid=oid,
+        resume_name=resolved_name,
+        resume_description=resolved_description,
+        resume=blob_url,
+    )
+
+
 @tool(name="generate_resume_pdf",description="Use This Tool To Generate PDF of the Resume From Latex source")
 def generate_resume_pdf(
-    latex_code: Annotated[str, "Complete valid LaTeX source for the resume document."] = ""
+    latex_code: Annotated[str, "Complete valid LaTeX source for the resume document."] = "",
+    resume_name: Annotated[str, "Optional resume name for database tracking."] = "",
+    resume_description: Annotated[str, "Optional resume description for database tracking."] = "",
 ) -> str:
     """Compile LaTeX resume code into PDF, upload to Azure Blob, and return blob URL."""
     tool_name = "generate_resume_pdf"
@@ -297,6 +330,17 @@ def generate_resume_pdf(
                     tool_name,
                     error,
                 )
+
+            try:
+                _persist_generated_resume(
+                    latex_code=latex_source,
+                    blob_url=blob_url,
+                    resume_name=resume_name,
+                    resume_description=resume_description,
+                )
+            except Exception as exc:
+                error = f"persist: resume generated but failed to save record. {exc}"
+                return format_tool_failure(tool_name, error)
 
             return blob_url
     except Exception as exc:

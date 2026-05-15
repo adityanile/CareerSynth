@@ -8,7 +8,7 @@ import {
 } from "@/lib/entra-token-store";
 import styles from "./profile-resource-manager.module.css";
 
-type ResourceTab = "projects" | "experiences" | "achievements" | "educations";
+type ResourceTab = "projects" | "experiences" | "achievements" | "educations" | "resumes";
 
 interface ProjectItem {
   id: number;
@@ -44,6 +44,15 @@ interface EducationItem {
   startYear: string;
   endYear: string | null;
   cgpaOrPercentage: string;
+}
+
+interface ResumeItem {
+  id: number;
+  resumeName: string;
+  resumeDescription: string;
+  resume: string;
+  createdOn: string;
+  updatedAt: string;
 }
 
 interface ItemsResponse<TItem> {
@@ -82,6 +91,12 @@ interface EducationForm {
   cgpaOrPercentage: string;
 }
 
+interface ResumeForm {
+  resumeName: string;
+  resumeDescription: string;
+  resume: string;
+}
+
 const emptyProjectForm: ProjectForm = {
   name: "",
   description: "",
@@ -112,6 +127,12 @@ const emptyEducationForm: EducationForm = {
   startYear: "",
   endYear: "",
   cgpaOrPercentage: "",
+};
+
+const emptyResumeForm: ResumeForm = {
+  resumeName: "",
+  resumeDescription: "",
+  resume: "",
 };
 
 function splitCsv(value: string): string[] {
@@ -186,34 +207,40 @@ export function ProfileResourceManager() {
   const [experiences, setExperiences] = useState<ExperienceItem[]>([]);
   const [achievements, setAchievements] = useState<AchievementItem[]>([]);
   const [educations, setEducations] = useState<EducationItem[]>([]);
+  const [resumes, setResumes] = useState<ResumeItem[]>([]);
 
   const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
   const [editingExperienceId, setEditingExperienceId] = useState<number | null>(null);
   const [editingAchievementId, setEditingAchievementId] = useState<number | null>(null);
   const [editingEducationId, setEditingEducationId] = useState<number | null>(null);
+  const [editingResumeId, setEditingResumeId] = useState<number | null>(null);
 
   const [projectForm, setProjectForm] = useState<ProjectForm>(emptyProjectForm);
   const [experienceForm, setExperienceForm] = useState<ExperienceForm>(emptyExperienceForm);
   const [achievementForm, setAchievementForm] = useState<AchievementForm>(emptyAchievementForm);
   const [educationForm, setEducationForm] = useState<EducationForm>(emptyEducationForm);
+  const [resumeForm, setResumeForm] = useState<ResumeForm>(emptyResumeForm);
 
-  const totalItems = projects.length + experiences.length + achievements.length + educations.length;
+  const totalItems =
+    projects.length + experiences.length + achievements.length + educations.length + resumes.length;
 
   const loadAllResources = async (token: string) => {
     setIsLoading(true);
     setError(null);
     try {
-      const [projectsResponse, experiencesResponse, achievementsResponse, educationsResponse] =
+      const [projectsResponse, experiencesResponse, achievementsResponse, educationsResponse, resumesResponse] =
         await Promise.all([
           request<ItemsResponse<ProjectItem>>("projects", token, { method: "GET" }),
           request<ItemsResponse<ExperienceItem>>("experiences", token, { method: "GET" }),
           request<ItemsResponse<AchievementItem>>("achievements", token, { method: "GET" }),
           request<ItemsResponse<EducationItem>>("educations", token, { method: "GET" }),
+          request<ItemsResponse<ResumeItem>>("resumes", token, { method: "GET" }),
         ]);
       setProjects(projectsResponse.items ?? []);
       setExperiences(experiencesResponse.items ?? []);
       setAchievements(achievementsResponse.items ?? []);
       setEducations(educationsResponse.items ?? []);
+      setResumes(resumesResponse.items ?? []);
     } catch (requestError) {
       const message =
         requestError instanceof Error ? requestError.message : "Failed to load resources.";
@@ -243,8 +270,9 @@ export function ProfileResourceManager() {
       { key: "experiences", label: `Experiences (${experiences.length})` },
       { key: "achievements", label: `Achievements (${achievements.length})` },
       { key: "educations", label: `Educations (${educations.length})` },
+      { key: "resumes", label: `Resumes (${resumes.length})` },
     ] as const,
-    [projects.length, experiences.length, achievements.length, educations.length],
+    [projects.length, experiences.length, achievements.length, educations.length, resumes.length],
   );
 
   const resetProjectForm = () => {
@@ -265,6 +293,11 @@ export function ProfileResourceManager() {
   const resetEducationForm = () => {
     setEditingEducationId(null);
     setEducationForm(emptyEducationForm);
+  };
+
+  const resetResumeForm = () => {
+    setEditingResumeId(null);
+    setResumeForm(emptyResumeForm);
   };
 
   const submitProject = async (event: FormEvent<HTMLFormElement>) => {
@@ -455,6 +488,46 @@ export function ProfileResourceManager() {
     }
   };
 
+  const submitResume = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!accessToken) {
+      return;
+    }
+    const payload = {
+      resumeName: resumeForm.resumeName.trim(),
+      resumeDescription: resumeForm.resumeDescription.trim(),
+      resume: resumeForm.resume.trim(),
+    };
+    if (!payload.resumeName || !payload.resumeDescription || !payload.resume) {
+      setError("Resume name, description and resume content are required.");
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+    try {
+      if (editingResumeId === null) {
+        const created = await request<ResumeItem>("resumes", accessToken, {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        setResumes((current) => [created, ...current]);
+      } else {
+        const updated = await request<ResumeItem>(`resumes/${editingResumeId}`, accessToken, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
+        setResumes((current) => current.map((item) => (item.id === editingResumeId ? updated : item)));
+      }
+      resetResumeForm();
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : "Failed to save resume.";
+      setError(message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const deleteResource = async (tab: ResourceTab, id: number) => {
     if (!accessToken) {
       return;
@@ -469,8 +542,10 @@ export function ProfileResourceManager() {
         setExperiences((current) => current.filter((item) => item.id !== id));
       } else if (tab === "achievements") {
         setAchievements((current) => current.filter((item) => item.id !== id));
-      } else {
+      } else if (tab === "educations") {
         setEducations((current) => current.filter((item) => item.id !== id));
+      } else {
+        setResumes((current) => current.filter((item) => item.id !== id));
       }
     } catch (requestError) {
       const message =
@@ -510,7 +585,7 @@ export function ProfileResourceManager() {
                 <div>
                   <h2 className={styles.title}>CareerSynth Database State</h2>
                   <p className={styles.subtitle}>
-                    Backend CRUD for projects, experiences, achievements, and educations.
+                    Backend CRUD for projects, experiences, achievements, educations, and resumes.
                   </p>
                 </div>
                 <button
@@ -1054,6 +1129,121 @@ export function ProfileResourceManager() {
                           type="button"
                           className={styles.secondaryButton}
                           onClick={resetEducationForm}
+                          disabled={isSaving}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </form>
+                  </article>
+                </>
+              )}
+
+              {activeTab === "resumes" && (
+                <>
+                  <article className={styles.panel}>
+                    <h3 className={styles.panelTitle}>Resumes</h3>
+                    {resumes.length === 0 ? (
+                      <p className={styles.empty}>No resumes found.</p>
+                    ) : (
+                      <ul className={styles.list}>
+                        {resumes.map((item) => (
+                          <li key={item.id} className={styles.item}>
+                            <button
+                              type="button"
+                              className={styles.resumeSelect}
+                              onClick={() => {
+                                const resumeUrl = item.resume.trim();
+                                if (resumeUrl) {
+                                  window.open(resumeUrl, "_blank", "noopener,noreferrer");
+                                }
+                              }}
+                            >
+                              <p className={styles.itemTitle}>{item.resumeName}</p>
+                              <p className={styles.itemLine}>{item.resumeDescription}</p>
+                              <p className={styles.itemLine}>Created: {item.createdOn}</p>
+                            </button>
+                            <div className={styles.actions}>
+                              <button
+                                type="button"
+                                className={styles.button}
+                                onClick={() => {
+                                  setEditingResumeId(item.id);
+                                  setResumeForm({
+                                    resumeName: item.resumeName,
+                                    resumeDescription: item.resumeDescription,
+                                    resume: item.resume,
+                                  });
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className={`${styles.button} ${styles.deleteButton}`}
+                                onClick={() => void deleteResource("resumes", item.id)}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </article>
+
+                  <article className={styles.panel}>
+                    <h3 className={styles.panelTitle}>
+                      {editingResumeId === null ? "Add Resume" : "Edit Resume"}
+                    </h3>
+                    <form className={styles.form} onSubmit={(event) => void submitResume(event)}>
+                      <label className={styles.label}>
+                        Resume Name
+                        <input
+                          className={styles.input}
+                          value={resumeForm.resumeName}
+                          onChange={(event) =>
+                            setResumeForm((current) => ({
+                              ...current,
+                              resumeName: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className={styles.label}>
+                        Resume Description
+                        <textarea
+                          className={styles.textarea}
+                          value={resumeForm.resumeDescription}
+                          onChange={(event) =>
+                            setResumeForm((current) => ({
+                              ...current,
+                              resumeDescription: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className={styles.label}>
+                        Resume Content
+                        <textarea
+                          className={styles.textarea}
+                          value={resumeForm.resume}
+                          onChange={(event) =>
+                            setResumeForm((current) => ({
+                              ...current,
+                              resume: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <div className={styles.formActions}>
+                        <button type="submit" className={styles.primaryButton} disabled={isSaving}>
+                          {isSaving ? "Saving..." : editingResumeId === null ? "Add" : "Update"}
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.secondaryButton}
+                          onClick={resetResumeForm}
                           disabled={isSaving}
                         >
                           Clear
