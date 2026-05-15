@@ -4,7 +4,7 @@ This frontend provides a multi-conversation chat UI for your existing AG-UI back
 
 It includes:
 
-- Copilot Runtime API route (`/api/copilotkit/:integrationId`) that proxies to your AG-UI agent
+- Copilot Runtime API route (`/api/copilotkit`) that proxies to your AG-UI agent
 - Chat interface with `CopilotChat`
 - Thread sidebar using `useThreads` (select/new/rename/archive + pagination)
 - Shared resume state panel (projects, experiences, achievements) rendered from AG-UI state
@@ -21,7 +21,7 @@ cp .env.example .env.local
 
 Key variables:
 
-- `COPILOT_DEFAULT_INTEGRATION_ID`: default UI route (redirect target from `/`)
+- `COPILOT_DEFAULT_INTEGRATION_ID`: default integration id used by backend/runtime config
 - `AG_UI_AGENT_URL`: URL for your running AG-UI backend (default: `http://127.0.0.1:8888/`)
 - `COPILOT_AGENT_ID` and `NEXT_PUBLIC_COPILOT_AGENT_ID`: runtime/UI agent IDs (if unset on UI, it falls back to `integrationId`)
 - `NEXT_PUBLIC_COPILOT_PUBLIC_API_KEY` (or `NEXT_PUBLIC_COPILOT_PUBLIC_LICENSE_KEY`): required for cross-session persistent threads on Copilot Cloud/Intelligence
@@ -56,7 +56,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000` (it redirects to `/<COPILOT_DEFAULT_INTEGRATION_ID>`).
+Open `http://localhost:3000`.
 
 ## 3. Shared Resume State Contract
 
@@ -80,8 +80,8 @@ These tools append list items to backend-maintained shared state and stream upda
 
 ## 4. Architecture
 
-- `src/app/api/copilotkit/[integrationId]/route.ts`: Copilot Runtime + `HttpAgent` bridge to AG-UI.
-- `src/components/agentic-chat.tsx`: CopilotKit provider with dynamic runtime URL (`/api/copilotkit/${integrationId}`).
+- `src/app/api/copilotkit/route.ts`: Copilot Runtime + `HttpAgent` bridge to AG-UI.
+- `src/components/agentic-chat.tsx`: CopilotKit provider using `/api/copilotkit`.
 - `src/components/multi-conversation-chat.tsx`: thread sidebar, chat panel, and shared-state editor panel.
 
 ## Notes

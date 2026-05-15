@@ -8,16 +8,18 @@ import {
   getEntraAccessToken,
   subscribeToEntraAccessToken,
 } from "@/lib/entra-token-store";
+import { resolveDefaultIntegrationId } from "@/lib/integration-config";
 
 interface AgenticChatProps {
-  integrationId: string;
+  integrationId?: string;
 }
 
 export function AgenticChat({ integrationId }: AgenticChatProps) {
+  const resolvedIntegrationId = integrationId ?? resolveDefaultIntegrationId();
   const publicApiKey =
     process.env.NEXT_PUBLIC_COPILOT_PUBLIC_API_KEY ??
     process.env.NEXT_PUBLIC_COPILOT_PUBLIC_LICENSE_KEY;
-  const agentId = process.env.NEXT_PUBLIC_COPILOT_AGENT_ID ?? integrationId;
+  const agentId = process.env.NEXT_PUBLIC_COPILOT_AGENT_ID ?? resolvedIntegrationId;
   const providerConfig = publicApiKey ? { publicApiKey } : {};
   const accessToken = useSyncExternalStore(
     subscribeToEntraAccessToken,
@@ -31,7 +33,7 @@ export function AgenticChat({ integrationId }: AgenticChatProps) {
 
   return (
     <CopilotKit
-      runtimeUrl={`/api/copilotkit/${integrationId}`}
+      runtimeUrl="/api/copilotkit"
       agent={agentId}
       headers={headers}
       useSingleEndpoint

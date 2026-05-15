@@ -1,10 +1,13 @@
-import { redirect } from "next/navigation";
+import { AgenticChat } from "@/components/agentic-chat";
+import { EntraAuthGate } from "@/components/entra-auth-gate";
+import { EntraAuthProvider } from "@/components/entra-auth-provider";
 
 export default function Home() {
-  const defaultIntegrationId =
-    process.env.COPILOT_DEFAULT_INTEGRATION_ID ??
-    process.env.NEXT_PUBLIC_COPILOT_AGENT_ID ??
-    "agui_agent";
-
-  redirect(`/${defaultIntegrationId}`);
+  return (
+    <EntraAuthProvider>
+      <EntraAuthGate>
+        <AgenticChat />
+      </EntraAuthGate>
+    </EntraAuthProvider>
+  );
 }
