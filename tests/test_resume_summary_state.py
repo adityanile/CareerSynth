@@ -206,3 +206,52 @@ def test_runtime_includes_skills_predicted_state_config(app_module):
         "tool_argument": "skills",
     }
     assert any(getattr(tool, "__name__", "") == "add_skills_tool" for tool in tools)
+
+
+def test_add_education_to_resume_tool_sets_education_list(app_module):
+    from agents.context import (
+        reset_current_oid,
+        reset_current_thread_id,
+        set_current_oid,
+        set_current_thread_id,
+    )
+    from agents.tools import resume_state_tools
+
+    resume_state_tools.resume_state_cache.clear()
+    resume_state_tools.resume_state_locks.clear()
+
+    oid_token = set_current_oid("user-1")
+    thread_token = set_current_thread_id("thread-1")
+    try:
+        result = resume_state_tools.add_education_to_resume_tool(
+            {
+                "degreeName": "B.Tech Computer Science",
+                "location": "Bengaluru",
+                "startYear": "2020",
+                "endYear": "2024",
+                "cgpaOrPercentage": "8.6 CGPA",
+            }
+        )
+    finally:
+        reset_current_thread_id(thread_token)
+        reset_current_oid(oid_token)
+
+    assert len(result["state"]["educations"]) == 1
+    assert result["state"]["educations"][0]["degreeName"] == "B.Tech Computer Science"
+
+
+def test_runtime_includes_educations_predicted_state_config(app_module):
+    from agents import runtime
+
+    agent_framework_agent = runtime._build_agent_framework_agent()
+
+    state_schema = agent_framework_agent.kwargs["state_schema"]
+    predict_state_config = agent_framework_agent.kwargs["predict_state_config"]
+    tools = agent_framework_agent.agent.kwargs["tools"]
+
+    assert state_schema["educations"]["type"] == "array"
+    assert predict_state_config["educations"] == {
+        "tool": "add_education_to_resume",
+        "tool_argument": "education",
+    }
+    assert any(getattr(tool, "__name__", "") == "add_education_to_resume_tool" for tool in tools)

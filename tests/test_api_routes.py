@@ -187,6 +187,53 @@ def test_achievement_date_accepts_freeform_string(client, oid_headers):
     assert res.json()["date"] == "Spring 2025"
 
 
+def test_educations_crud_and_filters(client, oid_headers):
+    payload = {
+        "degreeName": "B.Tech Computer Science",
+        "location": "Bengaluru",
+        "startYear": "2020",
+        "endYear": "2024",
+        "cgpaOrPercentage": "8.6 CGPA",
+    }
+    create_res = client.post("/api/educations", json=payload, headers=oid_headers("user-1"))
+    assert create_res.status_code == 201
+    education_id = create_res.json()["id"]
+
+    res = client.get("/api/educations", headers=oid_headers("user-1"))
+    assert res.status_code == 200
+    assert any(item["id"] == education_id for item in res.json()["items"])
+
+    res = client.get(f"/api/educations/{education_id}", headers=oid_headers("user-1"))
+    assert res.status_code == 200
+    assert res.json()["degreeName"] == "B.Tech Computer Science"
+
+    res = client.get(
+        "/api/educations?degree_name=B.Tech%20Computer%20Science",
+        headers=oid_headers("user-1"),
+    )
+    assert res.status_code == 200
+    assert any(item["id"] == education_id for item in res.json()["items"])
+
+    res = client.get("/api/educations/by-degree/B.Tech%20Computer%20Science", headers=oid_headers("user-1"))
+    assert res.status_code == 200
+    assert any(item["id"] == education_id for item in res.json()["items"])
+
+    patch_res = client.patch(
+        f"/api/educations/{education_id}",
+        json={"endYear": None, "cgpaOrPercentage": "87%"},
+        headers=oid_headers("user-1"),
+    )
+    assert patch_res.status_code == 200
+    assert patch_res.json()["endYear"] is None
+    assert patch_res.json()["cgpaOrPercentage"] == "87%"
+
+    delete_res = client.delete(f"/api/educations/{education_id}", headers=oid_headers("user-1"))
+    assert delete_res.status_code == 204
+
+    missing_res = client.get(f"/api/educations/{education_id}", headers=oid_headers("user-1"))
+    assert missing_res.status_code == 404
+
+
 def test_missing_oid_claim_returns_401(client):
     res = client.get("/api/projects")
     assert res.status_code == 401

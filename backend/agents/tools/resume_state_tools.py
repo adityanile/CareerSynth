@@ -20,6 +20,7 @@ def _empty_resume_state_payload() -> dict[str, Any]:
         "projects": [],
         "experiences": [],
         "achievements": [],
+        "educations": [],
         "summary": "",
         "skills": [],
         "profile": {
@@ -71,6 +72,7 @@ def _get_cached_resume_state(key: CacheKey) -> dict[str, Any]:
     projects = cached_state.get("projects")
     experiences = cached_state.get("experiences")
     achievements = cached_state.get("achievements")
+    educations = cached_state.get("educations")
     summary = cached_state.get("summary")
     skills = cached_state.get("skills")
     profile = cached_state.get("profile")
@@ -79,6 +81,7 @@ def _get_cached_resume_state(key: CacheKey) -> dict[str, Any]:
         "projects": list(projects) if isinstance(projects, list) else [],
         "experiences": list(experiences) if isinstance(experiences, list) else [],
         "achievements": list(achievements) if isinstance(achievements, list) else [],
+        "educations": list(educations) if isinstance(educations, list) else [],
         "summary": str(summary).strip() if isinstance(summary, str) else "",
         "skills": _normalize_string_list(skills),
         "profile": {
@@ -225,6 +228,47 @@ def add_achievement_to_resume_tool(achievement: dict[str, Any] | None = None) ->
     return state_update(
         text=f"Added achievement '{achievement_record['name']}' to shared resume state list.",
         state={"achievements": updated_achievements},
+    )
+
+
+@tool(
+    name="add_education_to_resume",
+    description=(
+        "Append an education item to shared resume state using an education object "
+        "with degreeName, location, startYear, optional endYear, and cgpaOrPercentage."
+    ),
+)
+def add_education_to_resume_tool(education: dict[str, Any] | None = None) -> Any:
+    if not isinstance(education, dict):
+        raise ValueError("education object is required")
+
+    education_record = {
+        "degreeName": _normalize_required_string(
+            education.get("degreeName") or education.get("degreename"),
+            "degreeName",
+        ),
+        "location": _normalize_required_string(education.get("location"), "location"),
+        "startYear": _normalize_required_string(
+            education.get("startYear") or education.get("startyear"),
+            "startYear",
+        ),
+        "endYear": _normalize_optional_string(education.get("endYear") or education.get("endyear")),
+        "cgpaOrPercentage": _normalize_required_string(
+            education.get("cgpaOrPercentage") or education.get("cgpa/percentage"),
+            "cgpaOrPercentage",
+        ),
+    }
+
+    oid = require_current_oid()
+    thread_id = require_current_thread_id()
+    updated_educations = _append_to_state_list(
+        _cache_key(oid, thread_id),
+        "educations",
+        education_record,
+    )
+    return state_update(
+        text=f"Added education '{education_record['degreeName']}' to shared resume state list.",
+        state={"educations": updated_educations},
     )
 
 

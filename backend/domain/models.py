@@ -36,6 +36,17 @@ class AchievementState(BaseModel):
     updatedAt: str
 
 
+class EducationState(BaseModel):
+    id: int
+    degreeName: str
+    location: str
+    startYear: str
+    endYear: Optional[str] = None
+    cgpaOrPercentage: str
+    createdAt: str
+    updatedAt: str
+
+
 class ProfileState(BaseModel):
     name: str = ""
     role: str = ""
@@ -49,6 +60,7 @@ class ResumeState(BaseModel):
     projects: list[ProjectState] = Field(default_factory=list)
     experiences: list[ExperienceState] = Field(default_factory=list)
     achievements: list[AchievementState] = Field(default_factory=list)
+    educations: list[EducationState] = Field(default_factory=list)
     summary: str = ""
     skills: list[str] = Field(default_factory=list)
     profile: ProfileState = Field(default_factory=ProfileState)
@@ -100,3 +112,19 @@ class AchievementPatch(BaseModel):
     link: Optional[str] = None
     organisation: Optional[str] = None
     date: Optional[str] = None
+
+
+class EducationCreate(BaseModel):
+    degreeName: str
+    location: str
+    startYear: str
+    endYear: Optional[str] = None
+    cgpaOrPercentage: str
+
+
+class EducationPatch(BaseModel):
+    degreeName: Optional[str] = None
+    location: Optional[str] = None
+    startYear: Optional[str] = None
+    endYear: Optional[str] = None
+    cgpaOrPercentage: Optional[str] = None

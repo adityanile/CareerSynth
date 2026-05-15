@@ -7,8 +7,10 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 
 from agents.tools.agent_profile_tools import (
     create_achievement_from_context_tool,
+    create_education_from_context_tool,
     create_experience_from_context_tool,
     query_achievements_from_context_tool,
+    query_educations_from_context_tool,
     query_experiences_from_context_tool,
 )
 from agents.tools.agent_project_tools import (
@@ -27,6 +29,7 @@ from domain.models import ResumeState
 from agents.tools.resume_pdf_tool import generate_resume_pdf
 from agents.tools.resume_state_tools import (
     add_achievement_to_resume_tool,
+    add_education_to_resume_tool,
     add_experience_to_resume_tool,
     add_profile_tool,
     add_skills_tool,
@@ -41,23 +44,26 @@ You are the main CareerSynth agent.
 
 Tool usage rules:
 - Intent routing is strict and mutually exclusive:
-- If the user explicitly says "add to resume", "put in resume", "include in resume", or "save to resume", use only the matching resume-state tool:
+- If the user explicitly says "add to resume", "put in resume", "include in resume", use only the matching resume-state tool:
   - `add_project_to_resume`
   - `add_experience_to_resume`
   - `add_achievement_to_resume`
+  - `add_education_to_resume`
   - `add_summary`
   - `add_skills`
   - `add_profile`
-- If the user explicitly says "create", "save", "store", or "add" for project/experience/achievement in system/database terms (and does not say resume), use only the matching create tool:
+- If the user explicitly says "create", "save", "store", or "add" for project/experience/achievement/education in system/database terms (and does not say resume), use only the matching create tool:
   - `create_project`
   - `create_experience`
   - `create_achievement`
+  - `create_education`
 - Never use a create tool when the user explicitly requested resume.
 - Never use a resume-state add tool when the user explicitly requested create/save/store in system/database terms.
 - If both intents appear in the same request, ask a single clarification question before calling tools.
 - Handle project queries with `query_projects`.
 - Handle experience queries with `query_experiences`.
 - Handle achievement queries with `query_achievements`.
+- Handle education queries with `query_educations`.
 - Never ask the user for `oid` for these operations. It is injected from authenticated request context.
 - Do not claim an operation succeeded unless the corresponding tool call succeeds.
 
@@ -65,12 +71,14 @@ Required fields before create tool calls:
 - `add_project_to_resume`: `project` with `projectName`, `description`, `techStack`
 - `add_experience_to_resume`: `experience` with `companyName`, `position`, `description`, `startDate`, `location` (optional `endDate`)
 - `add_achievement_to_resume`: `achievement` with `name`, `organisation`, `date`, `link`
+- `add_education_to_resume`: `education` with `degreeName`, `location`, `startYear`, `endYear` (optional), `cgpaOrPercentage`
 - `add_summary`: `summary` string
 - `add_skills`: `skills` list of strings
 - `add_profile`: `profile` with `name`, `role`, `contact`, `location`, `linkedinUrl`, `additionalUrls`
 - `create_project`: `name`, `description`, `tech_stack`, `urls`, `tags`
 - `create_experience`: `company_name`, `position`, `start_date`, `end_date` (nullable), `description`, `location`
 - `create_achievement`: `name`, `link`, `organisation`, `date`
+- `create_education`: `degree_name`, `location`, `start_year`, `end_year` (nullable), `cgpa_or_percentage`
 - If required fields are missing or ambiguous, ask only for those missing/ambiguous fields.
 
 Resume behavior:
@@ -95,6 +103,10 @@ PREDICTED_STATE_CONFIG: dict[str, dict[str, str | None]] = {
     "achievements": {
         "tool": "add_achievement_to_resume",
         "tool_argument": "achievement",
+    },
+    "educations": {
+        "tool": "add_education_to_resume",
+        "tool_argument": "education",
     },
     "summary": {
         "tool": "add_summary",
@@ -131,6 +143,7 @@ def _build_agent_framework_agent() -> AgentFrameworkAgent:
             add_project_to_resume_tool,
             add_experience_to_resume_tool,
             add_achievement_to_resume_tool,
+            add_education_to_resume_tool,
             add_summary_tool,
             add_skills_tool,
             add_profile_tool,
@@ -140,6 +153,8 @@ def _build_agent_framework_agent() -> AgentFrameworkAgent:
             query_experiences_from_context_tool,
             create_achievement_from_context_tool,
             query_achievements_from_context_tool,
+            create_education_from_context_tool,
+            query_educations_from_context_tool,
         ],
     )
 
@@ -161,6 +176,11 @@ def _build_agent_framework_agent() -> AgentFrameworkAgent:
             "achievements": {
                 "type": "array",
                 "description": "Current list of resume achievements",
+                "items": {"type": "object"},
+            },
+            "educations": {
+                "type": "array",
+                "description": "Current list of resume education entries",
                 "items": {"type": "object"},
             },
             "summary": {

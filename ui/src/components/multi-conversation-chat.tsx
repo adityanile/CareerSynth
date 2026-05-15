@@ -47,6 +47,21 @@ interface AchievementStateItem {
   updatedAt?: string;
 }
 
+interface EducationStateItem {
+  id?: number;
+  degreeName?: string;
+  degreename?: string;
+  location?: string;
+  startYear?: string;
+  startyear?: string;
+  endYear?: string | null;
+  endyear?: string | null;
+  cgpaOrPercentage?: string;
+  "cgpa/percentage"?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 interface ProfileStateItem {
   name?: string;
   role?: string;
@@ -62,6 +77,7 @@ interface ResumeState {
   projects?: ProjectStateItem[];
   experiences?: ExperienceStateItem[];
   achievements?: AchievementStateItem[];
+  educations?: EducationStateItem[];
   summary?: string;
   skills?: string[];
   profile?: ProfileStateItem;
@@ -87,6 +103,14 @@ interface AchievementFormState {
   organisation: string;
   date: string;
   link: string;
+}
+
+interface EducationFormState {
+  degreeName: string;
+  location: string;
+  startYear: string;
+  endYear: string;
+  cgpaOrPercentage: string;
 }
 
 interface ProfileFormState {
@@ -390,6 +414,7 @@ function ResumeStatePanel({ agentId }: { agentId: string }) {
   const projects = normalizeArray<ProjectStateItem>(state.projects);
   const experiences = normalizeArray<ExperienceStateItem>(state.experiences);
   const achievements = normalizeArray<AchievementStateItem>(state.achievements);
+  const educations = normalizeArray<EducationStateItem>(state.educations);
   const summary = asString(state.summary) ?? "";
   const skills = normalizeArray<string>(state.skills);
   const profile = normalizeProfile(state.profile);
@@ -405,12 +430,14 @@ function ResumeStatePanel({ agentId }: { agentId: string }) {
     projects.length > 0 ||
     experiences.length > 0 ||
     achievements.length > 0 ||
+    educations.length > 0 ||
     Boolean(summary) ||
     skills.length > 0 ||
     hasProfileData;
   const [editingProjectIndex, setEditingProjectIndex] = useState<number | null>(null);
   const [editingExperienceIndex, setEditingExperienceIndex] = useState<number | null>(null);
   const [editingAchievementIndex, setEditingAchievementIndex] = useState<number | null>(null);
+  const [editingEducationIndex, setEditingEducationIndex] = useState<number | null>(null);
   const [projectForm, setProjectForm] = useState<ProjectFormState>({
     name: "",
     description: "",
@@ -429,6 +456,13 @@ function ResumeStatePanel({ agentId }: { agentId: string }) {
     organisation: "",
     date: "",
     link: "",
+  });
+  const [educationForm, setEducationForm] = useState<EducationFormState>({
+    degreeName: "",
+    location: "",
+    startYear: "",
+    endYear: "",
+    cgpaOrPercentage: "",
   });
   const [isEditingSummary, setIsEditingSummary] = useState(false);
   const [summaryDraft, setSummaryDraft] = useState<string>("");
@@ -471,6 +505,17 @@ function ResumeStatePanel({ agentId }: { agentId: string }) {
   const resetAchievementForm = () => {
     setEditingAchievementIndex(null);
     setAchievementForm({ name: "", organisation: "", date: "", link: "" });
+  };
+
+  const resetEducationForm = () => {
+    setEditingEducationIndex(null);
+    setEducationForm({
+      degreeName: "",
+      location: "",
+      startYear: "",
+      endYear: "",
+      cgpaOrPercentage: "",
+    });
   };
 
   const submitProjectForm = (event: FormEvent<HTMLFormElement>) => {
@@ -547,6 +592,33 @@ function ResumeStatePanel({ agentId }: { agentId: string }) {
     }
     applyStatePatch({ achievements: updatedAchievements });
     resetAchievementForm();
+  };
+
+  const submitEducationForm = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const degreeName = educationForm.degreeName.trim();
+    const location = educationForm.location.trim();
+    const startYear = educationForm.startYear.trim();
+    const endYear = educationForm.endYear.trim();
+    const cgpaOrPercentage = educationForm.cgpaOrPercentage.trim();
+    if (!degreeName || !location || !startYear || !cgpaOrPercentage) {
+      return;
+    }
+    const item: EducationStateItem = {
+      degreeName,
+      location,
+      startYear,
+      endYear: endYear || null,
+      cgpaOrPercentage,
+    };
+    const updatedEducations = [...educations];
+    if (editingEducationIndex === null) {
+      updatedEducations.push(item);
+    } else {
+      updatedEducations[editingEducationIndex] = item;
+    }
+    applyStatePatch({ educations: updatedEducations });
+    resetEducationForm();
   };
 
   const startSummaryEdit = () => {
@@ -1232,6 +1304,128 @@ function ResumeStatePanel({ agentId }: { agentId: string }) {
             </form>
           }
         />
+        <StateSection
+          title="Educations"
+          count={educations.length}
+          emptyLabel="No educations"
+          items={educations}
+          renderItem={(item, index) => (
+            <>
+              <p className={styles.payloadTitle}>{item.degreeName ?? item.degreename ?? "Untitled degree"}</p>
+              <PayloadField label="Location" value={item.location} />
+              <PayloadField
+                label="Years"
+                value={
+                  item.startYear || item.startyear
+                    ? `${item.startYear ?? item.startyear} - ${item.endYear ?? item.endyear ?? "Present"}`
+                    : undefined
+                }
+              />
+              <PayloadField
+                label="CGPA/Percentage"
+                value={item.cgpaOrPercentage ?? item["cgpa/percentage"]}
+              />
+              <div className={styles.payloadActions}>
+                <button
+                  type="button"
+                  className={styles.payloadActionButton}
+                  onClick={() => {
+                    setEditingEducationIndex(index);
+                    setEducationForm({
+                      degreeName: item.degreeName ?? item.degreename ?? "",
+                      location: item.location ?? "",
+                      startYear: item.startYear ?? item.startyear ?? "",
+                      endYear: item.endYear ?? item.endyear ?? "",
+                      cgpaOrPercentage: item.cgpaOrPercentage ?? item["cgpa/percentage"] ?? "",
+                    });
+                  }}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.payloadActionButton} ${styles.deleteActionButton}`}
+                  onClick={() =>
+                    applyStatePatch({
+                      educations: educations.filter((_, educationIndex) => educationIndex !== index),
+                    })
+                  }
+                >
+                  Delete
+                </button>
+              </div>
+            </>
+          )}
+          footer={
+            <form className={styles.inlineForm} onSubmit={submitEducationForm}>
+              <label className={styles.inlineLabel}>
+                Degree Name
+                <input
+                  className={styles.inlineInput}
+                  value={educationForm.degreeName}
+                  onChange={(event) =>
+                    setEducationForm((current) => ({ ...current, degreeName: event.target.value }))
+                  }
+                />
+              </label>
+              <label className={styles.inlineLabel}>
+                Location
+                <input
+                  className={styles.inlineInput}
+                  value={educationForm.location}
+                  onChange={(event) =>
+                    setEducationForm((current) => ({ ...current, location: event.target.value }))
+                  }
+                />
+              </label>
+              <label className={styles.inlineLabel}>
+                Start Year
+                <input
+                  className={styles.inlineInput}
+                  value={educationForm.startYear}
+                  onChange={(event) =>
+                    setEducationForm((current) => ({ ...current, startYear: event.target.value }))
+                  }
+                />
+              </label>
+              <label className={styles.inlineLabel}>
+                End Year (optional)
+                <input
+                  className={styles.inlineInput}
+                  value={educationForm.endYear}
+                  onChange={(event) =>
+                    setEducationForm((current) => ({ ...current, endYear: event.target.value }))
+                  }
+                />
+              </label>
+              <label className={styles.inlineLabel}>
+                CGPA/Percentage
+                <input
+                  className={styles.inlineInput}
+                  value={educationForm.cgpaOrPercentage}
+                  onChange={(event) =>
+                    setEducationForm((current) => ({
+                      ...current,
+                      cgpaOrPercentage: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <div className={styles.inlineActions}>
+                <button type="submit" className={styles.inlineActionPrimary}>
+                  {editingEducationIndex === null ? "Add Education" : "Update Education"}
+                </button>
+                <button
+                  type="button"
+                  className={styles.inlineActionSecondary}
+                  onClick={resetEducationForm}
+                >
+                  Clear
+                </button>
+              </div>
+            </form>
+          }
+        />
       </div>
     </aside>
   );
@@ -1402,6 +1596,19 @@ function summarizeToolCall(
         status === "complete"
           ? `Added achievement "${achievementName}" to shared resume state.`
           : `Updating shared state for achievement "${achievementName}".`,
+    };
+  }
+
+  if (name === "add_education_to_resume") {
+    const payload = asRecord(parameters);
+    const education = asRecord(payload.education);
+    const degreeName = asString(education.degreeName) ?? "education";
+    return {
+      title: `${statusPrefix}: add_education_to_resume`,
+      body:
+        status === "complete"
+          ? `Added education "${degreeName}" to shared resume state.`
+          : `Updating shared state for education "${degreeName}".`,
     };
   }
 

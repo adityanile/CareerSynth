@@ -8,7 +8,7 @@ import {
 } from "@/lib/entra-token-store";
 import styles from "./profile-resource-manager.module.css";
 
-type ResourceTab = "projects" | "experiences" | "achievements";
+type ResourceTab = "projects" | "experiences" | "achievements" | "educations";
 
 interface ProjectItem {
   id: number;
@@ -35,6 +35,15 @@ interface AchievementItem {
   link: string;
   organisation: string;
   date: string;
+}
+
+interface EducationItem {
+  id: number;
+  degreeName: string;
+  location: string;
+  startYear: string;
+  endYear: string | null;
+  cgpaOrPercentage: string;
 }
 
 interface ItemsResponse<TItem> {
@@ -65,6 +74,14 @@ interface AchievementForm {
   date: string;
 }
 
+interface EducationForm {
+  degreeName: string;
+  location: string;
+  startYear: string;
+  endYear: string;
+  cgpaOrPercentage: string;
+}
+
 const emptyProjectForm: ProjectForm = {
   name: "",
   description: "",
@@ -87,6 +104,14 @@ const emptyAchievementForm: AchievementForm = {
   link: "",
   organisation: "",
   date: "",
+};
+
+const emptyEducationForm: EducationForm = {
+  degreeName: "",
+  location: "",
+  startYear: "",
+  endYear: "",
+  cgpaOrPercentage: "",
 };
 
 function splitCsv(value: string): string[] {
@@ -160,30 +185,35 @@ export function ProfileResourceManager() {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [experiences, setExperiences] = useState<ExperienceItem[]>([]);
   const [achievements, setAchievements] = useState<AchievementItem[]>([]);
+  const [educations, setEducations] = useState<EducationItem[]>([]);
 
   const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
   const [editingExperienceId, setEditingExperienceId] = useState<number | null>(null);
   const [editingAchievementId, setEditingAchievementId] = useState<number | null>(null);
+  const [editingEducationId, setEditingEducationId] = useState<number | null>(null);
 
   const [projectForm, setProjectForm] = useState<ProjectForm>(emptyProjectForm);
   const [experienceForm, setExperienceForm] = useState<ExperienceForm>(emptyExperienceForm);
   const [achievementForm, setAchievementForm] = useState<AchievementForm>(emptyAchievementForm);
+  const [educationForm, setEducationForm] = useState<EducationForm>(emptyEducationForm);
 
-  const totalItems = projects.length + experiences.length + achievements.length;
+  const totalItems = projects.length + experiences.length + achievements.length + educations.length;
 
   const loadAllResources = async (token: string) => {
     setIsLoading(true);
     setError(null);
     try {
-      const [projectsResponse, experiencesResponse, achievementsResponse] =
+      const [projectsResponse, experiencesResponse, achievementsResponse, educationsResponse] =
         await Promise.all([
           request<ItemsResponse<ProjectItem>>("projects", token, { method: "GET" }),
           request<ItemsResponse<ExperienceItem>>("experiences", token, { method: "GET" }),
           request<ItemsResponse<AchievementItem>>("achievements", token, { method: "GET" }),
+          request<ItemsResponse<EducationItem>>("educations", token, { method: "GET" }),
         ]);
       setProjects(projectsResponse.items ?? []);
       setExperiences(experiencesResponse.items ?? []);
       setAchievements(achievementsResponse.items ?? []);
+      setEducations(educationsResponse.items ?? []);
     } catch (requestError) {
       const message =
         requestError instanceof Error ? requestError.message : "Failed to load resources.";
@@ -212,8 +242,9 @@ export function ProfileResourceManager() {
       { key: "projects", label: `Projects (${projects.length})` },
       { key: "experiences", label: `Experiences (${experiences.length})` },
       { key: "achievements", label: `Achievements (${achievements.length})` },
+      { key: "educations", label: `Educations (${educations.length})` },
     ] as const,
-    [projects.length, experiences.length, achievements.length],
+    [projects.length, experiences.length, achievements.length, educations.length],
   );
 
   const resetProjectForm = () => {
@@ -229,6 +260,11 @@ export function ProfileResourceManager() {
   const resetAchievementForm = () => {
     setEditingAchievementId(null);
     setAchievementForm(emptyAchievementForm);
+  };
+
+  const resetEducationForm = () => {
+    setEditingEducationId(null);
+    setEducationForm(emptyEducationForm);
   };
 
   const submitProject = async (event: FormEvent<HTMLFormElement>) => {
@@ -374,6 +410,51 @@ export function ProfileResourceManager() {
     }
   };
 
+  const submitEducation = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!accessToken) {
+      return;
+    }
+    const payload = {
+      degreeName: educationForm.degreeName.trim(),
+      location: educationForm.location.trim(),
+      startYear: educationForm.startYear.trim(),
+      endYear: educationForm.endYear.trim() || null,
+      cgpaOrPercentage: educationForm.cgpaOrPercentage.trim(),
+    };
+    if (!payload.degreeName || !payload.location || !payload.startYear || !payload.cgpaOrPercentage) {
+      setError("Education degree, location, start year and cgpa/percentage are required.");
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+    try {
+      if (editingEducationId === null) {
+        const created = await request<EducationItem>("educations", accessToken, {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        setEducations((current) => [created, ...current]);
+      } else {
+        const updated = await request<EducationItem>(`educations/${editingEducationId}`, accessToken, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
+        setEducations((current) =>
+          current.map((item) => (item.id === editingEducationId ? updated : item)),
+        );
+      }
+      resetEducationForm();
+    } catch (requestError) {
+      const message =
+        requestError instanceof Error ? requestError.message : "Failed to save education.";
+      setError(message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const deleteResource = async (tab: ResourceTab, id: number) => {
     if (!accessToken) {
       return;
@@ -386,8 +467,10 @@ export function ProfileResourceManager() {
         setProjects((current) => current.filter((item) => item.id !== id));
       } else if (tab === "experiences") {
         setExperiences((current) => current.filter((item) => item.id !== id));
-      } else {
+      } else if (tab === "achievements") {
         setAchievements((current) => current.filter((item) => item.id !== id));
+      } else {
+        setEducations((current) => current.filter((item) => item.id !== id));
       }
     } catch (requestError) {
       const message =
@@ -427,7 +510,7 @@ export function ProfileResourceManager() {
                 <div>
                   <h2 className={styles.title}>CareerSynth Database State</h2>
                   <p className={styles.subtitle}>
-                    Backend CRUD for projects, experiences, and achievements.
+                    Backend CRUD for projects, experiences, achievements, and educations.
                   </p>
                 </div>
                 <button
@@ -836,6 +919,141 @@ export function ProfileResourceManager() {
                           type="button"
                           className={styles.secondaryButton}
                           onClick={resetAchievementForm}
+                          disabled={isSaving}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </form>
+                  </article>
+                </>
+              )}
+
+              {activeTab === "educations" && (
+                <>
+                  <article className={styles.panel}>
+                    <h3 className={styles.panelTitle}>Educations</h3>
+                    {educations.length === 0 ? (
+                      <p className={styles.empty}>No educations found.</p>
+                    ) : (
+                      <ul className={styles.list}>
+                        {educations.map((item) => (
+                          <li key={item.id} className={styles.item}>
+                            <p className={styles.itemTitle}>{item.degreeName}</p>
+                            <p className={styles.itemLine}>{item.location}</p>
+                            <p className={styles.itemLine}>
+                              {item.startYear} - {item.endYear ?? "Present"}
+                            </p>
+                            <p className={styles.itemLine}>{item.cgpaOrPercentage}</p>
+                            <div className={styles.actions}>
+                              <button
+                                type="button"
+                                className={styles.button}
+                                onClick={() => {
+                                  setEditingEducationId(item.id);
+                                  setEducationForm({
+                                    degreeName: item.degreeName,
+                                    location: item.location,
+                                    startYear: item.startYear,
+                                    endYear: item.endYear ?? "",
+                                    cgpaOrPercentage: item.cgpaOrPercentage,
+                                  });
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className={`${styles.button} ${styles.deleteButton}`}
+                                onClick={() => void deleteResource("educations", item.id)}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </article>
+
+                  <article className={styles.panel}>
+                    <h3 className={styles.panelTitle}>
+                      {editingEducationId === null ? "Add Education" : "Edit Education"}
+                    </h3>
+                    <form className={styles.form} onSubmit={(event) => void submitEducation(event)}>
+                      <label className={styles.label}>
+                        Degree Name
+                        <input
+                          className={styles.input}
+                          value={educationForm.degreeName}
+                          onChange={(event) =>
+                            setEducationForm((current) => ({
+                              ...current,
+                              degreeName: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className={styles.label}>
+                        Location
+                        <input
+                          className={styles.input}
+                          value={educationForm.location}
+                          onChange={(event) =>
+                            setEducationForm((current) => ({
+                              ...current,
+                              location: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className={styles.label}>
+                        Start Year
+                        <input
+                          className={styles.input}
+                          value={educationForm.startYear}
+                          onChange={(event) =>
+                            setEducationForm((current) => ({
+                              ...current,
+                              startYear: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className={styles.label}>
+                        End Year (optional)
+                        <input
+                          className={styles.input}
+                          value={educationForm.endYear}
+                          onChange={(event) =>
+                            setEducationForm((current) => ({
+                              ...current,
+                              endYear: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className={styles.label}>
+                        CGPA/Percentage
+                        <input
+                          className={styles.input}
+                          value={educationForm.cgpaOrPercentage}
+                          onChange={(event) =>
+                            setEducationForm((current) => ({
+                              ...current,
+                              cgpaOrPercentage: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <div className={styles.formActions}>
+                        <button type="submit" className={styles.primaryButton} disabled={isSaving}>
+                          {isSaving ? "Saving..." : editingEducationId === null ? "Add" : "Update"}
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.secondaryButton}
+                          onClick={resetEducationForm}
                           disabled={isSaving}
                         >
                           Clear

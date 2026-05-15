@@ -120,6 +120,19 @@ def _row_to_achievement(row: sqlite3.Row) -> dict[str, Any]:
     }
 
 
+def _row_to_education(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "degreeName": row["degree_name"],
+        "location": row["location"],
+        "startYear": row["start_year"],
+        "endYear": row["end_year"],
+        "cgpaOrPercentage": row["cgpa_or_percentage"],
+        "createdAt": row["created_at"],
+        "updatedAt": row["updated_at"],
+    }
+
+
 def _list_rows_for_oid(
     *,
     table: str,
@@ -372,6 +385,19 @@ def list_achievements_for_user(
     return [_row_to_achievement(row) for row in rows]
 
 
+def list_educations_for_user(
+    oid: str,
+    degree_name: Optional[str] = None,
+    location: Optional[str] = None,
+) -> list[dict[str, Any]]:
+    rows = _list_rows_for_oid(
+        table="educations",
+        oid=oid,
+        filters={"degree_name": degree_name, "location": location},
+    )
+    return [_row_to_education(row) for row in rows]
+
+
 def create_experience_for_user(
     oid: str,
     company_name: str,
@@ -523,6 +549,47 @@ def create_achievement_for_user(
     return _row_to_achievement(row)
 
 
+def create_education_for_user(
+    oid: str,
+    degree_name: str,
+    location: str,
+    start_year: str,
+    end_year: Optional[str],
+    cgpa_or_percentage: str,
+) -> dict[str, Any]:
+    normalized_degree_name = degree_name.strip()
+    normalized_location = location.strip()
+    normalized_cgpa_or_percentage = cgpa_or_percentage.strip()
+    normalized_start_year = _normalize_date(start_year, "startYear")
+    normalized_end_year = _normalize_date(end_year, "endYear", allow_null=True)
+
+    if not normalized_degree_name or not normalized_location or not normalized_cgpa_or_percentage:
+        raise ProfileValidationError("degreeName, location and cgpaOrPercentage are required")
+
+    with _get_db_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO educations (oid, degree_name, location, start_year, end_year, cgpa_or_percentage)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                oid,
+                normalized_degree_name,
+                normalized_location,
+                normalized_start_year,
+                normalized_end_year,
+                normalized_cgpa_or_percentage,
+            ),
+        )
+        education_id = cursor.lastrowid
+        row = conn.execute(
+            "SELECT * FROM educations WHERE id = ? AND oid = ?",
+            (education_id, oid),
+        ).fetchone()
+
+    return _row_to_education(row)
+
+
 def get_achievement_for_user(oid: str, achievement_id: int) -> dict[str, Any]:
     row = _fetch_row_by_id_for_oid(
         table="achievements",
@@ -531,6 +598,16 @@ def get_achievement_for_user(oid: str, achievement_id: int) -> dict[str, Any]:
         not_found_message="Achievement not found",
     )
     return _row_to_achievement(row)
+
+
+def get_education_for_user(oid: str, education_id: int) -> dict[str, Any]:
+    row = _fetch_row_by_id_for_oid(
+        table="educations",
+        row_id=education_id,
+        oid=oid,
+        not_found_message="Education not found",
+    )
+    return _row_to_education(row)
 
 
 def update_achievement_for_user(
@@ -580,6 +657,57 @@ def update_achievement_for_user(
     return _row_to_achievement(row)
 
 
+def update_education_for_user(
+    oid: str,
+    education_id: int,
+    updates: dict[str, Any],
+) -> dict[str, Any]:
+    if not updates:
+        raise ProfileValidationError("No fields provided for update")
+
+    set_clauses: list[str] = []
+    params: list[Any] = []
+
+    if "degreeName" in updates:
+        set_clauses.append("degree_name = ?")
+        params.append(_require_non_empty_text(updates["degreeName"], "degreeName"))
+
+    if "location" in updates:
+        set_clauses.append("location = ?")
+        params.append(_require_non_empty_text(updates["location"], "location"))
+
+    if "startYear" in updates:
+        set_clauses.append("start_year = ?")
+        params.append(_normalize_date(updates["startYear"], "startYear"))
+
+    if "endYear" in updates:
+        set_clauses.append("end_year = ?")
+        params.append(_normalize_date(updates["endYear"], "endYear", allow_null=True))
+
+    if "cgpaOrPercentage" in updates:
+        set_clauses.append("cgpa_or_percentage = ?")
+        params.append(_require_non_empty_text(updates["cgpaOrPercentage"], "cgpaOrPercentage"))
+
+    if not set_clauses:
+        raise ProfileValidationError("No valid fields provided for update")
+
+    set_clauses.append("updated_at = CURRENT_TIMESTAMP")
+    params.extend([education_id, oid])
+
+    with _get_db_connection() as conn:
+        cursor = conn.execute(
+            f"UPDATE educations SET {', '.join(set_clauses)} WHERE id = ? AND oid = ?",
+            params,
+        )
+        if cursor.rowcount == 0:
+            raise ProfileNotFoundError("Education not found")
+        row = conn.execute(
+            "SELECT * FROM educations WHERE id = ? AND oid = ?",
+            (education_id, oid),
+        ).fetchone()
+    return _row_to_education(row)
+
+
 def delete_achievement_for_user(oid: str, achievement_id: int) -> None:
     _delete_row_by_id_for_oid(
         table="achievements",
@@ -588,3 +716,11 @@ def delete_achievement_for_user(oid: str, achievement_id: int) -> None:
         not_found_message="Achievement not found",
     )
 
+
+def delete_education_for_user(oid: str, education_id: int) -> None:
+    _delete_row_by_id_for_oid(
+        table="educations",
+        row_id=education_id,
+        oid=oid,
+        not_found_message="Education not found",
+    )

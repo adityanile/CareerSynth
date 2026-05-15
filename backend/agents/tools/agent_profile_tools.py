@@ -5,7 +5,9 @@ from agent_framework import tool
 from agents.context import require_current_oid
 from domain.repository import (
     create_achievement_for_user,
+    create_education_for_user,
     create_experience_for_user,
+    list_educations_for_user,
     list_achievements_for_user,
     list_experiences_for_user,
 )
@@ -137,6 +139,66 @@ def query_achievements_from_context_tool(
             name=name or None,
         )
         return _tool_success({"items": achievements})
+    except Exception as exc:
+        error = str(exc)
+        return _tool_failure(tool_name, error)
+
+
+@tool(
+    name="create_education",
+    description="Create an education record for the authenticated user from request context",
+)
+def create_education_from_context_tool(
+    degree_name: str = "",
+    location: str = "",
+    start_year: str = "",
+    end_year: str = "",
+    cgpa_or_percentage: str = "",
+    degreeName: str = "",
+    startYear: str = "",
+    endYear: str = "",
+    cgpaOrPercentage: str = "",
+) -> dict[str, Any] | str:
+    tool_name = "create_education"
+    try:
+        resolved_degree_name = degree_name or degreeName
+        resolved_start_year = start_year or startYear
+        resolved_end_year = end_year or endYear or None
+        resolved_cgpa_or_percentage = cgpa_or_percentage or cgpaOrPercentage
+        oid = require_current_oid()
+        education = create_education_for_user(
+            oid=oid,
+            degree_name=resolved_degree_name,
+            location=location,
+            start_year=resolved_start_year,
+            end_year=resolved_end_year,
+            cgpa_or_percentage=resolved_cgpa_or_percentage,
+        )
+        return _tool_success(education)
+    except Exception as exc:
+        error = str(exc)
+        return _tool_failure(tool_name, error)
+
+
+@tool(
+    name="query_educations",
+    description="Get education records for the authenticated user from request context",
+)
+def query_educations_from_context_tool(
+    degree_name: str = "",
+    location: str = "",
+    degreeName: str = "",
+) -> dict[str, Any] | str:
+    tool_name = "query_educations"
+    try:
+        resolved_degree_name = degree_name or degreeName
+        oid = require_current_oid()
+        educations = list_educations_for_user(
+            oid=oid,
+            degree_name=resolved_degree_name or None,
+            location=location or None,
+        )
+        return _tool_success({"items": educations})
     except Exception as exc:
         error = str(exc)
         return _tool_failure(tool_name, error)
