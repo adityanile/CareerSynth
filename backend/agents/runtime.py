@@ -1,6 +1,8 @@
 import json
 from collections.abc import AsyncGenerator
-from agent_framework import Agent
+from pathlib import Path
+
+from agent_framework import Agent, SkillsProvider
 from agent_framework.ag_ui import AgentFrameworkAgent, add_agent_framework_fastapi_endpoint
 from agent_framework.openai import OpenAIChatCompletionClient
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -64,6 +66,19 @@ Tool usage rules:
 - Handle experience queries with `query_experiences`.
 - Handle achievement queries with `query_achievements`.
 - Handle education queries with `query_educations`.
+- Before answering questions about the user's profile, interests, strengths, fit, or recommendations, decide which profile query tools are needed and call them first.
+- Do not answer user-specific background/career-fit questions from assumptions or generic memory when relevant query tools exist.
+- For broad recommendation questions (for example: best career options for me), call all relevant query tools first:
+  - `query_projects`
+  - `query_experiences`
+  - `query_achievements`
+  - `query_educations`
+- For focused questions, call the matching query tool(s) before answering:
+  - "what projects I love" -> `query_projects`
+  - experience-based question -> `query_experiences`
+  - achievements-based question -> `query_achievements`
+  - education-based question -> `query_educations`
+- If query tool results are empty or insufficient, explicitly say what data is missing and ask a targeted follow-up instead of replying "I don't know".
 - Never ask the user for `oid` for these operations. It is injected from authenticated request context.
 - Do not claim an operation succeeded unless the corresponding tool call succeeds.
 
@@ -82,6 +97,9 @@ Required fields before create tool calls:
 - If required fields are missing or ambiguous, ask only for those missing/ambiguous fields.
 
 Resume behavior:
+- For requests to create or refine a resume from current state, first load and follow the `resume-from-snapshot` skill guidance.
+- Treat the shared state snapshot (`profile`, `summary`, `skills`, `projects`, `experiences`, `achievements`, `educations`) as source of truth for resume drafting.
+- If key snapshot sections needed for the requested resume are missing, ask targeted follow-up questions for only those missing sections.
 - For resume drafting, refinement, LaTeX generation, and PDF generation, use `generate_resume_pdf` when needed.
 - For `generate_resume_pdf`, pass full final LaTeX source and any explicit user constraints already requested.
 
@@ -133,11 +151,16 @@ def _build_openai_client() -> OpenAIChatCompletionClient:
 
 
 def _build_agent_framework_agent() -> AgentFrameworkAgent:
+    skills_provider = SkillsProvider.from_paths(
+        skill_paths=str(Path(__file__).parent / "skills"),
+    )
+
     agent = Agent(
         client=_build_openai_client(),
         instructions=MAIN_AGENT_INSTRUCTIONS,
         name="main",
         middleware=[ToolCallSequenceRepairMiddleware()],
+        context_providers=[skills_provider],
         tools=[
             generate_resume_pdf,
             add_project_to_resume_tool,
