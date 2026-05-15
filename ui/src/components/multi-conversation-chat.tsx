@@ -1561,53 +1561,58 @@ function summarizeToolCall(
 
   if (name === "add_project_to_resume") {
     const payload = asRecord(parameters);
-    const project = asRecord(payload.project);
+    const projects = normalizeArray<Record<string, unknown>>(payload.projects);
+    const project = projects.length > 0 ? asRecord(projects[0]) : asRecord(payload.project);
     const projectName = asString(project.projectName) ?? "project";
     return {
       title: `${statusPrefix}: add_project_to_resume`,
       body:
         status === "complete"
-          ? `Added project "${projectName}" to shared resume state.`
+          ? `Updated shared resume projects (${projects.length || 1}).`
           : `Updating shared state for project "${projectName}".`,
     };
   }
 
   if (name === "add_experience_to_resume") {
     const payload = asRecord(parameters);
-    const experience = asRecord(payload.experience);
+    const experiences = normalizeArray<Record<string, unknown>>(payload.experiences);
+    const experience = experiences.length > 0 ? asRecord(experiences[0]) : asRecord(payload.experience);
     const companyName = asString(experience.companyName) ?? "company";
     const position = asString(experience.position) ?? "role";
     return {
       title: `${statusPrefix}: add_experience_to_resume`,
       body:
         status === "complete"
-          ? `Added experience "${position} @ ${companyName}" to shared resume state.`
+          ? `Updated shared resume experiences (${experiences.length || 1}).`
           : `Updating shared state for experience "${position} @ ${companyName}".`,
     };
   }
 
   if (name === "add_achievement_to_resume") {
     const payload = asRecord(parameters);
-    const achievement = asRecord(payload.achievement);
+    const achievements = normalizeArray<Record<string, unknown>>(payload.achievements);
+    const achievement =
+      achievements.length > 0 ? asRecord(achievements[0]) : asRecord(payload.achievement);
     const achievementName = asString(achievement.name) ?? "achievement";
     return {
       title: `${statusPrefix}: add_achievement_to_resume`,
       body:
         status === "complete"
-          ? `Added achievement "${achievementName}" to shared resume state.`
+          ? `Updated shared resume achievements (${achievements.length || 1}).`
           : `Updating shared state for achievement "${achievementName}".`,
     };
   }
 
   if (name === "add_education_to_resume") {
     const payload = asRecord(parameters);
-    const education = asRecord(payload.education);
+    const educations = normalizeArray<Record<string, unknown>>(payload.educations);
+    const education = educations.length > 0 ? asRecord(educations[0]) : asRecord(payload.education);
     const degreeName = asString(education.degreeName) ?? "education";
     return {
       title: `${statusPrefix}: add_education_to_resume`,
       body:
         status === "complete"
-          ? `Added education "${degreeName}" to shared resume state.`
+          ? `Updated shared resume educations (${educations.length || 1}).`
           : `Updating shared state for education "${degreeName}".`,
     };
   }

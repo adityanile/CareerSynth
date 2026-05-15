@@ -68,10 +68,10 @@ Tool usage rules:
 - Do not claim an operation succeeded unless the corresponding tool call succeeds.
 
 Required fields before create tool calls:
-- `add_project_to_resume`: `project` with `projectName`, `description`, `techStack`
-- `add_experience_to_resume`: `experience` with `companyName`, `position`, `description`, `startDate`, `location` (optional `endDate`)
-- `add_achievement_to_resume`: `achievement` with `name`, `organisation`, `date`, `link`
-- `add_education_to_resume`: `education` with `degreeName`, `location`, `startYear`, `endYear` (optional), `cgpaOrPercentage`
+- `add_project_to_resume`: `projects` list of objects with `projectName`, `description`, `techStack`
+- `add_experience_to_resume`: `experiences` list of objects with `companyName`, `position`, `description`, `startDate`, `location` (optional `endDate`)
+- `add_achievement_to_resume`: `achievements` list of objects with `name`, `organisation`, `date`, `link`
+- `add_education_to_resume`: `educations` list of objects with `degreeName`, `location`, `startYear`, `endYear` (optional), `cgpaOrPercentage`
 - `add_summary`: `summary` string
 - `add_skills`: `skills` list of strings
 - `add_profile`: `profile` with `name`, `role`, `contact`, `location`, `linkedinUrl`, `additionalUrls`
@@ -94,19 +94,19 @@ Response behavior:
 PREDICTED_STATE_CONFIG: dict[str, dict[str, str | None]] = {
     "projects": {
         "tool": "add_project_to_resume",
-        "tool_argument": "project",
+        "tool_argument": "projects",
     },
     "experiences": {
         "tool": "add_experience_to_resume",
-        "tool_argument": "experience",
+        "tool_argument": "experiences",
     },
     "achievements": {
         "tool": "add_achievement_to_resume",
-        "tool_argument": "achievement",
+        "tool_argument": "achievements",
     },
     "educations": {
         "tool": "add_education_to_resume",
-        "tool_argument": "education",
+        "tool_argument": "educations",
     },
     "summary": {
         "tool": "add_summary",

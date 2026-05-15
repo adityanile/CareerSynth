@@ -1,37 +1,9 @@
 from __future__ import annotations
 
-from threading import Lock
 from typing import Any
 
 from agent_framework import tool
 from agent_framework.ag_ui import state_update
-
-from agents.context import require_current_oid, require_current_thread_id
-
-CacheKey = tuple[str, str]
-
-resume_state_cache: dict[CacheKey, dict[str, Any]] = {}
-resume_state_locks: dict[CacheKey, Lock] = {}
-resume_state_locks_guard = Lock()
-
-
-def _empty_resume_state_payload() -> dict[str, Any]:
-    return {
-        "projects": [],
-        "experiences": [],
-        "achievements": [],
-        "educations": [],
-        "summary": "",
-        "skills": [],
-        "profile": {
-            "name": "",
-            "role": "",
-            "contact": "",
-            "location": "",
-            "linkedinUrl": "",
-            "additionalUrls": [],
-        },
-    }
 
 
 def _normalize_required_string(value: Any, field_name: str) -> str:
@@ -54,96 +26,8 @@ def _normalize_string_list(value: Any) -> list[str]:
     return []
 
 
-def _cache_key(oid: str, thread_id: str) -> CacheKey:
-    return (oid, thread_id)
-
-
-def _get_lock_for_cache_key(key: CacheKey) -> Lock:
-    with resume_state_locks_guard:
-        lock = resume_state_locks.get(key)
-        if lock is None:
-            lock = Lock()
-            resume_state_locks[key] = lock
-        return lock
-
-
-def _get_cached_resume_state(key: CacheKey) -> dict[str, Any]:
-    cached_state = resume_state_cache.get(key, _empty_resume_state_payload())
-    projects = cached_state.get("projects")
-    experiences = cached_state.get("experiences")
-    achievements = cached_state.get("achievements")
-    educations = cached_state.get("educations")
-    summary = cached_state.get("summary")
-    skills = cached_state.get("skills")
-    profile = cached_state.get("profile")
-    profile_payload = profile if isinstance(profile, dict) else {}
+def _normalize_project_record(project: dict[str, Any]) -> dict[str, Any]:
     return {
-        "projects": list(projects) if isinstance(projects, list) else [],
-        "experiences": list(experiences) if isinstance(experiences, list) else [],
-        "achievements": list(achievements) if isinstance(achievements, list) else [],
-        "educations": list(educations) if isinstance(educations, list) else [],
-        "summary": str(summary).strip() if isinstance(summary, str) else "",
-        "skills": _normalize_string_list(skills),
-        "profile": {
-            "name": str(profile_payload.get("name") or "").strip(),
-            "role": str(profile_payload.get("role") or "").strip(),
-            "contact": str(profile_payload.get("contact") or "").strip(),
-            "location": str(profile_payload.get("location") or "").strip(),
-            "linkedinUrl": str(profile_payload.get("linkedinUrl") or "").strip(),
-            "additionalUrls": _normalize_string_list(profile_payload.get("additionalUrls")),
-        },
-    }
-
-
-def _append_to_state_list(cache_key: CacheKey, key: str, item: dict[str, Any]) -> list[dict[str, Any]]:
-    lock = _get_lock_for_cache_key(cache_key)
-    with lock:
-        state_payload = _get_cached_resume_state(cache_key)
-        updated_list = [*state_payload[key], item]
-        state_payload[key] = updated_list
-        resume_state_cache[cache_key] = state_payload
-        return updated_list
-
-
-def _set_state_string(cache_key: CacheKey, key: str, value: str) -> str:
-    lock = _get_lock_for_cache_key(cache_key)
-    with lock:
-        state_payload = _get_cached_resume_state(cache_key)
-        state_payload[key] = value
-        resume_state_cache[cache_key] = state_payload
-        return value
-
-
-def _set_state_object(cache_key: CacheKey, key: str, value: dict[str, Any]) -> dict[str, Any]:
-    lock = _get_lock_for_cache_key(cache_key)
-    with lock:
-        state_payload = _get_cached_resume_state(cache_key)
-        state_payload[key] = value
-        resume_state_cache[cache_key] = state_payload
-        return value
-
-
-def _set_state_list(cache_key: CacheKey, key: str, value: list[str]) -> list[str]:
-    lock = _get_lock_for_cache_key(cache_key)
-    with lock:
-        state_payload = _get_cached_resume_state(cache_key)
-        state_payload[key] = value
-        resume_state_cache[cache_key] = state_payload
-        return value
-
-
-@tool(
-    name="add_project_to_resume",
-    description=(
-        "Append a project to shared resume state using a project object with "
-        "projectName, description, and techStack."
-    ),
-)
-def add_project_to_resume_tool(project: dict[str, Any] | None = None) -> Any:
-    if not isinstance(project, dict):
-        raise ValueError("project object is required")
-
-    project_record = {
         "name": _normalize_required_string(
             project.get("projectName") or project.get("projectname"),
             "projectName",
@@ -152,27 +36,9 @@ def add_project_to_resume_tool(project: dict[str, Any] | None = None) -> Any:
         "techStack": _normalize_string_list(project.get("techStack")),
     }
 
-    oid = require_current_oid()
-    thread_id = require_current_thread_id()
-    updated_projects = _append_to_state_list(_cache_key(oid, thread_id), "projects", project_record)
-    return state_update(
-        text=f"Added project '{project_record['name']}' to shared resume state list.",
-        state={"projects": updated_projects},
-    )
 
-
-@tool(
-    name="add_experience_to_resume",
-    description=(
-        "Append an experience to shared resume state using an experience object "
-        "with companyName, position, description, startDate, optional endDate, and location."
-    ),
-)
-def add_experience_to_resume_tool(experience: dict[str, Any] | None = None) -> Any:
-    if not isinstance(experience, dict):
-        raise ValueError("experience object is required")
-
-    experience_record = {
+def _normalize_experience_record(experience: dict[str, Any]) -> dict[str, Any]:
+    return {
         "companyName": _normalize_required_string(experience.get("companyName"), "companyName"),
         "position": _normalize_required_string(experience.get("position"), "position"),
         "description": _normalize_required_string(experience.get("description"), "description"),
@@ -181,34 +47,9 @@ def add_experience_to_resume_tool(experience: dict[str, Any] | None = None) -> A
         "location": _normalize_required_string(experience.get("location"), "location"),
     }
 
-    oid = require_current_oid()
-    thread_id = require_current_thread_id()
-    updated_experiences = _append_to_state_list(
-        _cache_key(oid, thread_id),
-        "experiences",
-        experience_record,
-    )
-    return state_update(
-        text=(
-            f"Added experience '{experience_record['position']} @ "
-            f"{experience_record['companyName']}' to shared resume state list."
-        ),
-        state={"experiences": updated_experiences},
-    )
 
-
-@tool(
-    name="add_achievement_to_resume",
-    description=(
-        "Append an achievement to shared resume state using an achievement object "
-        "with name, organisation, date, and link."
-    ),
-)
-def add_achievement_to_resume_tool(achievement: dict[str, Any] | None = None) -> Any:
-    if not isinstance(achievement, dict):
-        raise ValueError("achievement object is required")
-
-    achievement_record = {
+def _normalize_achievement_record(achievement: dict[str, Any]) -> dict[str, Any]:
+    return {
         "name": _normalize_required_string(achievement.get("name"), "name"),
         "organisation": _normalize_required_string(
             achievement.get("organisation"),
@@ -218,31 +59,9 @@ def add_achievement_to_resume_tool(achievement: dict[str, Any] | None = None) ->
         "link": _normalize_required_string(achievement.get("link"), "link"),
     }
 
-    oid = require_current_oid()
-    thread_id = require_current_thread_id()
-    updated_achievements = _append_to_state_list(
-        _cache_key(oid, thread_id),
-        "achievements",
-        achievement_record,
-    )
-    return state_update(
-        text=f"Added achievement '{achievement_record['name']}' to shared resume state list.",
-        state={"achievements": updated_achievements},
-    )
 
-
-@tool(
-    name="add_education_to_resume",
-    description=(
-        "Append an education item to shared resume state using an education object "
-        "with degreeName, location, startYear, optional endYear, and cgpaOrPercentage."
-    ),
-)
-def add_education_to_resume_tool(education: dict[str, Any] | None = None) -> Any:
-    if not isinstance(education, dict):
-        raise ValueError("education object is required")
-
-    education_record = {
+def _normalize_education_record(education: dict[str, Any]) -> dict[str, Any]:
+    return {
         "degreeName": _normalize_required_string(
             education.get("degreeName") or education.get("degreename"),
             "degreeName",
@@ -259,16 +78,123 @@ def add_education_to_resume_tool(education: dict[str, Any] | None = None) -> Any
         ),
     }
 
-    oid = require_current_oid()
-    thread_id = require_current_thread_id()
-    updated_educations = _append_to_state_list(
-        _cache_key(oid, thread_id),
-        "educations",
-        education_record,
+
+def _normalize_record_list(
+    records: list[dict[str, Any]] | None,
+    single_record: dict[str, Any] | None,
+    list_field_name: str,
+    single_field_name: str,
+    normalizer: Any,
+) -> list[dict[str, Any]]:
+    if isinstance(records, list):
+        normalized: list[dict[str, Any]] = []
+        for record in records:
+            if not isinstance(record, dict):
+                raise ValueError(f"{single_field_name} object is required")
+            normalized.append(normalizer(record))
+        if not normalized:
+            raise ValueError(f"{list_field_name} are required")
+        return normalized
+
+    if isinstance(single_record, dict):
+        return [normalizer(single_record)]
+
+    raise ValueError(f"{list_field_name} are required")
+
+
+@tool(
+    name="add_project_to_resume",
+    description=(
+        "Set shared resume projects using `projects` list of project objects with "
+        "projectName, description, and techStack."
+    ),
+)
+def add_project_to_resume_tool(
+    projects: list[dict[str, Any]] | None = None,
+    project: dict[str, Any] | None = None,
+) -> Any:
+    project_records = _normalize_record_list(
+        projects,
+        project,
+        "projects",
+        "project",
+        _normalize_project_record,
     )
     return state_update(
-        text=f"Added education '{education_record['degreeName']}' to shared resume state list.",
-        state={"educations": updated_educations},
+        text=f"Updated {len(project_records)} projects in shared resume state.",
+        state={"projects": project_records},
+    )
+
+
+@tool(
+    name="add_experience_to_resume",
+    description=(
+        "Set shared resume experiences using `experiences` list of experience objects "
+        "with companyName, position, description, startDate, optional endDate, and location."
+    ),
+)
+def add_experience_to_resume_tool(
+    experiences: list[dict[str, Any]] | None = None,
+    experience: dict[str, Any] | None = None,
+) -> Any:
+    experience_records = _normalize_record_list(
+        experiences,
+        experience,
+        "experiences",
+        "experience",
+        _normalize_experience_record,
+    )
+    return state_update(
+        text=f"Updated {len(experience_records)} experiences in shared resume state.",
+        state={"experiences": experience_records},
+    )
+
+
+@tool(
+    name="add_achievement_to_resume",
+    description=(
+        "Set shared resume achievements using `achievements` list of achievement objects "
+        "with name, organisation, date, and link."
+    ),
+)
+def add_achievement_to_resume_tool(
+    achievements: list[dict[str, Any]] | None = None,
+    achievement: dict[str, Any] | None = None,
+) -> Any:
+    achievement_records = _normalize_record_list(
+        achievements,
+        achievement,
+        "achievements",
+        "achievement",
+        _normalize_achievement_record,
+    )
+    return state_update(
+        text=f"Updated {len(achievement_records)} achievements in shared resume state.",
+        state={"achievements": achievement_records},
+    )
+
+
+@tool(
+    name="add_education_to_resume",
+    description=(
+        "Set shared resume educations using `educations` list of education objects "
+        "with degreeName, location, startYear, optional endYear, and cgpaOrPercentage."
+    ),
+)
+def add_education_to_resume_tool(
+    educations: list[dict[str, Any]] | None = None,
+    education: dict[str, Any] | None = None,
+) -> Any:
+    education_records = _normalize_record_list(
+        educations,
+        education,
+        "educations",
+        "education",
+        _normalize_education_record,
+    )
+    return state_update(
+        text=f"Updated {len(education_records)} educations in shared resume state.",
+        state={"educations": education_records},
     )
 
 
@@ -278,17 +204,9 @@ def add_education_to_resume_tool(education: dict[str, Any] | None = None) -> Any
 )
 def add_summary_tool(summary: str | None = None) -> Any:
     summary_value = _normalize_required_string(summary, "summary")
-
-    oid = require_current_oid()
-    thread_id = require_current_thread_id()
-    updated_summary = _set_state_string(
-        _cache_key(oid, thread_id),
-        "summary",
-        summary_value,
-    )
     return state_update(
         text="Updated summary in shared resume state.",
-        state={"summary": updated_summary},
+        state={"summary": summary_value},
     )
 
 
@@ -317,16 +235,9 @@ def add_profile_tool(profile: dict[str, Any] | None = None) -> Any:
         ),
     }
 
-    oid = require_current_oid()
-    thread_id = require_current_thread_id()
-    updated_profile = _set_state_object(
-        _cache_key(oid, thread_id),
-        "profile",
-        profile_record,
-    )
     return state_update(
         text=f"Updated profile in shared resume state for '{profile_record['name']}'.",
-        state={"profile": updated_profile},
+        state={"profile": profile_record},
     )
 
 
@@ -339,14 +250,7 @@ def add_skills_tool(skills: list[str] | str | None = None) -> Any:
     if not skills_list:
         raise ValueError("skills are required")
 
-    oid = require_current_oid()
-    thread_id = require_current_thread_id()
-    updated_skills = _set_state_list(
-        _cache_key(oid, thread_id),
-        "skills",
-        skills_list,
-    )
     return state_update(
-        text=f"Updated {len(updated_skills)} skills in shared resume state.",
-        state={"skills": updated_skills},
+        text=f"Updated {len(skills_list)} skills in shared resume state.",
+        state={"skills": skills_list},
     )

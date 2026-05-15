@@ -83,10 +83,10 @@ The UI expects the AG-UI state shape:
 
 Current backend pattern (in `server.py` + `resume_state_tools.py`) uses:
 
-- `add_project_to_resume` with argument `project`
-- `add_experience_to_resume` with argument `experience`
-- `add_achievement_to_resume` with argument `achievement`
-- `add_education_to_resume` with argument `education`
+- `add_project_to_resume` with argument `projects` (array)
+- `add_experience_to_resume` with argument `experiences` (array)
+- `add_achievement_to_resume` with argument `achievements` (array)
+- `add_education_to_resume` with argument `educations` (array)
 - `add_summary` with argument `summary` (string)
 - `add_skills` with argument `skills` (string[])
 - `add_profile` with argument `profile` (object)

@@ -10,9 +10,6 @@ def test_add_summary_tool_sets_and_overwrites_summary(app_module):
     )
     from agents.tools import resume_state_tools
 
-    resume_state_tools.resume_state_cache.clear()
-    resume_state_tools.resume_state_locks.clear()
-
     oid_token = set_current_oid("user-1")
     thread_token = set_current_thread_id("thread-1")
     try:
@@ -24,9 +21,6 @@ def test_add_summary_tool_sets_and_overwrites_summary(app_module):
 
     assert first["state"] == {"summary": "Build reliable backend systems."}
     assert second["state"] == {"summary": "Lead backend architecture decisions."}
-    assert resume_state_tools.resume_state_cache[("user-1", "thread-1")]["summary"] == (
-        "Lead backend architecture decisions."
-    )
 
 
 def test_add_summary_tool_rejects_empty_string(app_module):
@@ -73,9 +67,6 @@ def test_add_profile_tool_sets_profile(app_module):
         set_current_thread_id,
     )
     from agents.tools import resume_state_tools
-
-    resume_state_tools.resume_state_cache.clear()
-    resume_state_tools.resume_state_locks.clear()
 
     oid_token = set_current_oid("user-1")
     thread_token = set_current_thread_id("thread-1")
@@ -158,9 +149,6 @@ def test_add_skills_tool_sets_skills(app_module):
     )
     from agents.tools import resume_state_tools
 
-    resume_state_tools.resume_state_cache.clear()
-    resume_state_tools.resume_state_locks.clear()
-
     oid_token = set_current_oid("user-1")
     thread_token = set_current_thread_id("thread-1")
     try:
@@ -217,26 +205,24 @@ def test_add_education_to_resume_tool_sets_education_list(app_module):
     )
     from agents.tools import resume_state_tools
 
-    resume_state_tools.resume_state_cache.clear()
-    resume_state_tools.resume_state_locks.clear()
-
     oid_token = set_current_oid("user-1")
     thread_token = set_current_thread_id("thread-1")
     try:
         result = resume_state_tools.add_education_to_resume_tool(
-            {
-                "degreeName": "B.Tech Computer Science",
-                "location": "Bengaluru",
-                "startYear": "2020",
-                "endYear": "2024",
-                "cgpaOrPercentage": "8.6 CGPA",
-            }
+            educations=[
+                {
+                    "degreeName": "B.Tech Computer Science",
+                    "location": "Bengaluru",
+                    "startYear": "2020",
+                    "endYear": "2024",
+                    "cgpaOrPercentage": "8.6 CGPA",
+                }
+            ]
         )
     finally:
         reset_current_thread_id(thread_token)
         reset_current_oid(oid_token)
 
-    assert len(result["state"]["educations"]) == 1
     assert result["state"]["educations"][0]["degreeName"] == "B.Tech Computer Science"
 
 
@@ -252,6 +238,16 @@ def test_runtime_includes_educations_predicted_state_config(app_module):
     assert state_schema["educations"]["type"] == "array"
     assert predict_state_config["educations"] == {
         "tool": "add_education_to_resume",
-        "tool_argument": "education",
+        "tool_argument": "educations",
     }
     assert any(getattr(tool, "__name__", "") == "add_education_to_resume_tool" for tool in tools)
+
+
+def test_runtime_uses_plural_list_tool_arguments(app_module):
+    from agents import runtime
+
+    predict_state_config = runtime._build_agent_framework_agent().kwargs["predict_state_config"]
+
+    assert predict_state_config["projects"]["tool_argument"] == "projects"
+    assert predict_state_config["experiences"]["tool_argument"] == "experiences"
+    assert predict_state_config["achievements"]["tool_argument"] == "achievements"
