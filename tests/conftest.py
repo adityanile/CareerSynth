@@ -141,6 +141,7 @@ def app_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "dummy")
     monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.invalid")
     monkeypatch.setenv("AZURE_OPENAI_API_KEY", "dummy-key")
+    monkeypatch.setenv("USE_SQLITE", "1")
     monkeypatch.setenv("SQLITE_DB_PATH", str(tmp_path / "test.db"))
 
     if "server" in sys.modules:

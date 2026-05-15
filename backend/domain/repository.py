@@ -1,6 +1,18 @@
-import json
-import sqlite3
-from typing import Any, Optional
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Any, Optional, TypeVar
+
+from sqlmodel import SQLModel, select
+
+from db.models import (
+    AchievementRecord,
+    EducationRecord,
+    ExperienceRecord,
+    ProjectRecord,
+    ResumeRecord,
+)
+from db.session import configure_database, get_session
 
 
 class ProjectValidationError(Exception):
@@ -19,23 +31,22 @@ class ProfileNotFoundError(Exception):
     pass
 
 
-_db_path = "careersynth.db"
-
-
 def configure_project_db(db_path: str) -> None:
-    global _db_path
-    _db_path = db_path
+    configure_database(use_sqlite=True, sqlite_db_path=db_path, database_url=None)
 
 
 def configure_profile_db(db_path: str) -> None:
-    global _db_path
-    _db_path = db_path
+    configure_database(use_sqlite=True, sqlite_db_path=db_path, database_url=None)
 
 
-def _get_db_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(_db_path)
-    conn.row_factory = sqlite3.Row
-    return conn
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _to_timestamp_text(value: datetime) -> str:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc).isoformat()
+    return value.astimezone(timezone.utc).isoformat()
 
 
 def _parse_comma_separated(value: Optional[str]) -> list[str]:
@@ -81,111 +92,99 @@ def _require_non_empty_text(value: Optional[str], field_name: str) -> str:
     return normalized
 
 
-def _row_to_project(row: sqlite3.Row) -> dict[str, Any]:
+def _row_to_project(row: ProjectRecord) -> dict[str, Any]:
     return {
-        "id": row["id"],
-        "name": row["name"],
-        "techStack": json.loads(row["tech_stack"]),
-        "urls": json.loads(row["urls"]),
-        "description": row["description"],
-        "tags": json.loads(row["tags"]),
-        "createdAt": row["created_at"],
-        "updatedAt": row["updated_at"],
+        "id": row.id,
+        "name": row.name,
+        "techStack": row.tech_stack or [],
+        "urls": row.urls or [],
+        "description": row.description,
+        "tags": row.tags or [],
+        "createdAt": _to_timestamp_text(row.created_at),
+        "updatedAt": _to_timestamp_text(row.updated_at),
     }
 
 
-def _row_to_experience(row: sqlite3.Row) -> dict[str, Any]:
+def _row_to_experience(row: ExperienceRecord) -> dict[str, Any]:
     return {
-        "id": row["id"],
-        "companyName": row["company_name"],
-        "startDate": row["start_date"],
-        "endDate": row["end_date"],
-        "position": row["position"],
-        "description": row["description"],
-        "location": row["location"],
-        "createdAt": row["created_at"],
-        "updatedAt": row["updated_at"],
+        "id": row.id,
+        "companyName": row.company_name,
+        "startDate": row.start_date,
+        "endDate": row.end_date,
+        "position": row.position,
+        "description": row.description,
+        "location": row.location,
+        "createdAt": _to_timestamp_text(row.created_at),
+        "updatedAt": _to_timestamp_text(row.updated_at),
     }
 
 
-def _row_to_achievement(row: sqlite3.Row) -> dict[str, Any]:
+def _row_to_achievement(row: AchievementRecord) -> dict[str, Any]:
     return {
-        "id": row["id"],
-        "name": row["name"],
-        "link": row["link"],
-        "organisation": row["organisation"],
-        "date": row["date"],
-        "createdAt": row["created_at"],
-        "updatedAt": row["updated_at"],
+        "id": row.id,
+        "name": row.name,
+        "link": row.link,
+        "organisation": row.organisation,
+        "date": row.date,
+        "createdAt": _to_timestamp_text(row.created_at),
+        "updatedAt": _to_timestamp_text(row.updated_at),
     }
 
 
-def _row_to_education(row: sqlite3.Row) -> dict[str, Any]:
+def _row_to_education(row: EducationRecord) -> dict[str, Any]:
     return {
-        "id": row["id"],
-        "degreeName": row["degree_name"],
-        "location": row["location"],
-        "startYear": row["start_year"],
-        "endYear": row["end_year"],
-        "cgpaOrPercentage": row["cgpa_or_percentage"],
-        "createdAt": row["created_at"],
-        "updatedAt": row["updated_at"],
+        "id": row.id,
+        "degreeName": row.degree_name,
+        "location": row.location,
+        "startYear": row.start_year,
+        "endYear": row.end_year,
+        "cgpaOrPercentage": row.cgpa_or_percentage,
+        "createdAt": _to_timestamp_text(row.created_at),
+        "updatedAt": _to_timestamp_text(row.updated_at),
     }
 
 
-def _row_to_resume(row: sqlite3.Row) -> dict[str, Any]:
+def _row_to_resume(row: ResumeRecord) -> dict[str, Any]:
     return {
-        "id": row["id"],
-        "resumeName": row["resume_name"],
-        "resumeDescription": row["resume_description"],
-        "resume": row["resume"],
-        "createdOn": row["created_on"],
-        "updatedAt": row["updated_at"],
+        "id": row.id,
+        "resumeName": row.resume_name,
+        "resumeDescription": row.resume_description,
+        "resume": row.resume,
+        "createdOn": _to_timestamp_text(row.created_on),
+        "updatedAt": _to_timestamp_text(row.updated_at),
     }
 
 
-def _list_rows_for_oid(
+RecordType = TypeVar("RecordType", bound=SQLModel)
+
+
+def _fetch_row_by_id_for_oid(
     *,
-    table: str,
+    model: type[RecordType],
+    row_id: int,
     oid: str,
-    filters: dict[str, Optional[str]] | None = None,
-) -> list[sqlite3.Row]:
-    where_clauses = ["oid = ?"]
-    params: list[Any] = [oid]
-
-    for column, value in (filters or {}).items():
-        if value is None:
-            continue
-        normalized = value.strip()
-        if not normalized:
-            continue
-        where_clauses.append(f"{column} = ?")
-        params.append(normalized)
-
-    sql = f"SELECT * FROM {table} WHERE {' AND '.join(where_clauses)} ORDER BY id DESC"
-    with _get_db_connection() as conn:
-        return conn.execute(sql, params).fetchall()
+    not_found_message: str,
+) -> RecordType:
+    with get_session() as session:
+        row = session.get(model, row_id)
+        if row is None or getattr(row, "oid", None) != oid:
+            raise ProfileNotFoundError(not_found_message)
+        return row
 
 
-def _fetch_row_by_id_for_oid(*, table: str, row_id: int, oid: str, not_found_message: str) -> sqlite3.Row:
-    with _get_db_connection() as conn:
-        row = conn.execute(
-            f"SELECT * FROM {table} WHERE id = ? AND oid = ?",
-            (row_id, oid),
-        ).fetchone()
-    if not row:
-        raise ProfileNotFoundError(not_found_message)
-    return row
-
-
-def _delete_row_by_id_for_oid(*, table: str, row_id: int, oid: str, not_found_message: str) -> None:
-    with _get_db_connection() as conn:
-        cursor = conn.execute(
-            f"DELETE FROM {table} WHERE id = ? AND oid = ?",
-            (row_id, oid),
-        )
-    if cursor.rowcount == 0:
-        raise ProfileNotFoundError(not_found_message)
+def _delete_row_by_id_for_oid(
+    *,
+    model: type[RecordType],
+    row_id: int,
+    oid: str,
+    not_found_message: str,
+) -> None:
+    with get_session() as session:
+        row = session.get(model, row_id)
+        if row is None or getattr(row, "oid", None) != oid:
+            raise ProfileNotFoundError(not_found_message)
+        session.delete(row)
+        session.commit()
 
 
 def list_projects_for_user(
@@ -207,26 +206,24 @@ def list_projects_for_user(
         tech_values.append(tech.strip())
     tech_values.extend(_parse_comma_separated(techs))
 
-    where_clauses = ["oid = ?"]
-    params: list[Any] = [oid]
-
+    statement = select(ProjectRecord).where(ProjectRecord.oid == oid)
     if name and name.strip():
-        where_clauses.append("name = ?")
-        params.append(name.strip())
+        statement = statement.where(ProjectRecord.name == name.strip())
+    statement = statement.order_by(ProjectRecord.id.desc())
 
-    for value in tag_values:
-        where_clauses.append("EXISTS (SELECT 1 FROM json_each(projects.tags) WHERE json_each.value = ?)")
-        params.append(value)
+    with get_session() as session:
+        rows = session.exec(statement).all()
 
-    for value in tech_values:
-        where_clauses.append("EXISTS (SELECT 1 FROM json_each(projects.tech_stack) WHERE json_each.value = ?)")
-        params.append(value)
+    def _has_all(values: list[str], row_values: list[str]) -> bool:
+        return all(value in row_values for value in values)
 
-    sql = f"SELECT * FROM projects WHERE {' AND '.join(where_clauses)} ORDER BY id DESC"
-    with _get_db_connection() as conn:
-        rows = conn.execute(sql, params).fetchall()
+    filtered = [
+        row
+        for row in rows
+        if _has_all(tag_values, row.tags or []) and _has_all(tech_values, row.tech_stack or [])
+    ]
 
-    return [_row_to_project(row) for row in rows]
+    return [_row_to_project(row) for row in filtered]
 
 
 def create_project_for_user(
@@ -243,42 +240,29 @@ def create_project_for_user(
     if not normalized_name or not normalized_description:
         raise ProjectValidationError("name and description are required")
 
-    normalized_tech_stack = _normalize_string_list(tech_stack, "techStack")
-    normalized_urls = _normalize_string_list(urls, "urls")
-    normalized_tags = _normalize_string_list(tags, "tags")
+    row = ProjectRecord(
+        oid=oid,
+        name=normalized_name,
+        tech_stack=_normalize_string_list(tech_stack, "techStack"),
+        urls=_normalize_string_list(urls, "urls"),
+        description=normalized_description,
+        tags=_normalize_string_list(tags, "tags"),
+        created_at=_utc_now(),
+        updated_at=_utc_now(),
+    )
 
-    with _get_db_connection() as conn:
-        cursor = conn.execute(
-            """
-            INSERT INTO projects (oid, name, tech_stack, urls, description, tags)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                oid,
-                normalized_name,
-                json.dumps(normalized_tech_stack),
-                json.dumps(normalized_urls),
-                normalized_description,
-                json.dumps(normalized_tags),
-            ),
-        )
-        project_id = cursor.lastrowid
-        row = conn.execute(
-            "SELECT * FROM projects WHERE id = ? AND oid = ?",
-            (project_id, oid),
-        ).fetchone()
+    with get_session() as session:
+        session.add(row)
+        session.commit()
+        session.refresh(row)
 
     return _row_to_project(row)
 
 
 def get_project_for_user(oid: str, project_id: int) -> dict[str, Any]:
-    with _get_db_connection() as conn:
-        row = conn.execute(
-            "SELECT * FROM projects WHERE id = ? AND oid = ?",
-            (project_id, oid),
-        ).fetchone()
-
-    if not row:
+    with get_session() as session:
+        row = session.get(ProjectRecord, project_id)
+    if row is None or row.oid != oid:
         raise ProjectNotFoundError("Project not found")
     return _row_to_project(row)
 
@@ -288,86 +272,71 @@ def get_projects_by_tag_for_user(oid: str, tag: str) -> list[dict[str, Any]]:
     if not tag_value:
         raise ProjectValidationError("tag is required")
 
-    with _get_db_connection() as conn:
-        rows = conn.execute(
-            """
-            SELECT * FROM projects
-            WHERE oid = ?
-              AND EXISTS (SELECT 1 FROM json_each(projects.tags) WHERE json_each.value = ?)
-            ORDER BY id DESC
-            """,
-            (oid, tag_value),
-        ).fetchall()
+    with get_session() as session:
+        rows = session.exec(
+            select(ProjectRecord)
+            .where(ProjectRecord.oid == oid)
+            .order_by(ProjectRecord.id.desc())
+        ).all()
 
-    return [_row_to_project(row) for row in rows]
+    return [_row_to_project(row) for row in rows if tag_value in (row.tags or [])]
 
 
 def update_project_for_user(oid: str, project_id: int, updates: dict[str, Any]) -> dict[str, Any]:
     if not updates:
         raise ProjectValidationError("No fields provided for update")
 
-    set_clauses: list[str] = []
-    params: list[Any] = []
-
-    if "name" in updates:
-        value = (updates["name"] or "").strip()
-        if not value:
-            raise ProjectValidationError("name cannot be empty")
-        set_clauses.append("name = ?")
-        params.append(value)
-
-    if "description" in updates:
-        value = (updates["description"] or "").strip()
-        if not value:
-            raise ProjectValidationError("description cannot be empty")
-        set_clauses.append("description = ?")
-        params.append(value)
-
-    if "techStack" in updates:
-        normalized = _normalize_string_list(updates["techStack"], "techStack")
-        set_clauses.append("tech_stack = ?")
-        params.append(json.dumps(normalized))
-
-    if "urls" in updates:
-        normalized = _normalize_string_list(updates["urls"], "urls")
-        set_clauses.append("urls = ?")
-        params.append(json.dumps(normalized))
-
-    if "tags" in updates:
-        normalized = _normalize_string_list(updates["tags"], "tags")
-        set_clauses.append("tags = ?")
-        params.append(json.dumps(normalized))
-
-    if not set_clauses:
-        raise ProjectValidationError("No valid fields provided for update")
-
-    set_clauses.append("updated_at = CURRENT_TIMESTAMP")
-    params.extend([project_id, oid])
-
-    with _get_db_connection() as conn:
-        cursor = conn.execute(
-            f"UPDATE projects SET {', '.join(set_clauses)} WHERE id = ? AND oid = ?",
-            params,
-        )
-        if cursor.rowcount == 0:
+    with get_session() as session:
+        row = session.get(ProjectRecord, project_id)
+        if row is None or row.oid != oid:
             raise ProjectNotFoundError("Project not found")
-        row = conn.execute(
-            "SELECT * FROM projects WHERE id = ? AND oid = ?",
-            (project_id, oid),
-        ).fetchone()
+
+        has_update = False
+
+        if "name" in updates:
+            value = (updates["name"] or "").strip()
+            if not value:
+                raise ProjectValidationError("name cannot be empty")
+            row.name = value
+            has_update = True
+
+        if "description" in updates:
+            value = (updates["description"] or "").strip()
+            if not value:
+                raise ProjectValidationError("description cannot be empty")
+            row.description = value
+            has_update = True
+
+        if "techStack" in updates:
+            row.tech_stack = _normalize_string_list(updates["techStack"], "techStack")
+            has_update = True
+
+        if "urls" in updates:
+            row.urls = _normalize_string_list(updates["urls"], "urls")
+            has_update = True
+
+        if "tags" in updates:
+            row.tags = _normalize_string_list(updates["tags"], "tags")
+            has_update = True
+
+        if not has_update:
+            raise ProjectValidationError("No valid fields provided for update")
+
+        row.updated_at = _utc_now()
+        session.add(row)
+        session.commit()
+        session.refresh(row)
 
     return _row_to_project(row)
 
 
 def delete_project_for_user(oid: str, project_id: int) -> None:
-    with _get_db_connection() as conn:
-        cursor = conn.execute(
-            "DELETE FROM projects WHERE id = ? AND oid = ?",
-            (project_id, oid),
-        )
-
-    if cursor.rowcount == 0:
-        raise ProjectNotFoundError("Project not found")
+    with get_session() as session:
+        row = session.get(ProjectRecord, project_id)
+        if row is None or row.oid != oid:
+            raise ProjectNotFoundError("Project not found")
+        session.delete(row)
+        session.commit()
 
 
 def list_experiences_for_user(
@@ -375,11 +344,18 @@ def list_experiences_for_user(
     position: Optional[str] = None,
     company_name: Optional[str] = None,
 ) -> list[dict[str, Any]]:
-    rows = _list_rows_for_oid(
-        table="experiences",
-        oid=oid,
-        filters={"position": position, "company_name": company_name},
-    )
+    statement = select(ExperienceRecord).where(ExperienceRecord.oid == oid)
+
+    if position and position.strip():
+        statement = statement.where(ExperienceRecord.position == position.strip())
+    if company_name and company_name.strip():
+        statement = statement.where(ExperienceRecord.company_name == company_name.strip())
+
+    statement = statement.order_by(ExperienceRecord.id.desc())
+
+    with get_session() as session:
+        rows = session.exec(statement).all()
+
     return [_row_to_experience(row) for row in rows]
 
 
@@ -388,11 +364,18 @@ def list_achievements_for_user(
     organisation: Optional[str] = None,
     name: Optional[str] = None,
 ) -> list[dict[str, Any]]:
-    rows = _list_rows_for_oid(
-        table="achievements",
-        oid=oid,
-        filters={"organisation": organisation, "name": name},
-    )
+    statement = select(AchievementRecord).where(AchievementRecord.oid == oid)
+
+    if organisation and organisation.strip():
+        statement = statement.where(AchievementRecord.organisation == organisation.strip())
+    if name and name.strip():
+        statement = statement.where(AchievementRecord.name == name.strip())
+
+    statement = statement.order_by(AchievementRecord.id.desc())
+
+    with get_session() as session:
+        rows = session.exec(statement).all()
+
     return [_row_to_achievement(row) for row in rows]
 
 
@@ -401,11 +384,18 @@ def list_educations_for_user(
     degree_name: Optional[str] = None,
     location: Optional[str] = None,
 ) -> list[dict[str, Any]]:
-    rows = _list_rows_for_oid(
-        table="educations",
-        oid=oid,
-        filters={"degree_name": degree_name, "location": location},
-    )
+    statement = select(EducationRecord).where(EducationRecord.oid == oid)
+
+    if degree_name and degree_name.strip():
+        statement = statement.where(EducationRecord.degree_name == degree_name.strip())
+    if location and location.strip():
+        statement = statement.where(EducationRecord.location == location.strip())
+
+    statement = statement.order_by(EducationRecord.id.desc())
+
+    with get_session() as session:
+        rows = session.exec(statement).all()
+
     return [_row_to_education(row) for row in rows]
 
 
@@ -413,11 +403,16 @@ def list_resumes_for_user(
     oid: str,
     resume_name: Optional[str] = None,
 ) -> list[dict[str, Any]]:
-    rows = _list_rows_for_oid(
-        table="resumes",
-        oid=oid,
-        filters={"resume_name": resume_name},
-    )
+    statement = select(ResumeRecord).where(ResumeRecord.oid == oid)
+
+    if resume_name and resume_name.strip():
+        statement = statement.where(ResumeRecord.resume_name == resume_name.strip())
+
+    statement = statement.order_by(ResumeRecord.id.desc())
+
+    with get_session() as session:
+        rows = session.exec(statement).all()
+
     return [_row_to_resume(row) for row in rows]
 
 
@@ -440,34 +435,29 @@ def create_experience_for_user(
     if not normalized_company_name or not normalized_position or not normalized_description or not normalized_location:
         raise ProfileValidationError("companyName, position, description and location are required")
 
-    with _get_db_connection() as conn:
-        cursor = conn.execute(
-            """
-            INSERT INTO experiences (oid, company_name, start_date, end_date, position, description, location)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                oid,
-                normalized_company_name,
-                normalized_start_date,
-                normalized_end_date,
-                normalized_position,
-                normalized_description,
-                normalized_location,
-            ),
-        )
-        experience_id = cursor.lastrowid
-        row = conn.execute(
-            "SELECT * FROM experiences WHERE id = ? AND oid = ?",
-            (experience_id, oid),
-        ).fetchone()
+    row = ExperienceRecord(
+        oid=oid,
+        company_name=normalized_company_name,
+        start_date=normalized_start_date,
+        end_date=normalized_end_date,
+        position=normalized_position,
+        description=normalized_description,
+        location=normalized_location,
+        created_at=_utc_now(),
+        updated_at=_utc_now(),
+    )
+
+    with get_session() as session:
+        session.add(row)
+        session.commit()
+        session.refresh(row)
 
     return _row_to_experience(row)
 
 
 def get_experience_for_user(oid: str, experience_id: int) -> dict[str, Any]:
     row = _fetch_row_by_id_for_oid(
-        table="experiences",
+        model=ExperienceRecord,
         row_id=experience_id,
         oid=oid,
         not_found_message="Experience not found",
@@ -483,56 +473,51 @@ def update_experience_for_user(
     if not updates:
         raise ProfileValidationError("No fields provided for update")
 
-    set_clauses: list[str] = []
-    params: list[Any] = []
-
-    if "companyName" in updates:
-        set_clauses.append("company_name = ?")
-        params.append(_require_non_empty_text(updates["companyName"], "companyName"))
-
-    if "startDate" in updates:
-        set_clauses.append("start_date = ?")
-        params.append(_normalize_date(updates["startDate"], "startDate"))
-
-    if "endDate" in updates:
-        set_clauses.append("end_date = ?")
-        params.append(_normalize_date(updates["endDate"], "endDate", allow_null=True))
-
-    if "position" in updates:
-        set_clauses.append("position = ?")
-        params.append(_require_non_empty_text(updates["position"], "position"))
-
-    if "description" in updates:
-        set_clauses.append("description = ?")
-        params.append(_require_non_empty_text(updates["description"], "description"))
-
-    if "location" in updates:
-        set_clauses.append("location = ?")
-        params.append(_require_non_empty_text(updates["location"], "location"))
-
-    if not set_clauses:
-        raise ProfileValidationError("No valid fields provided for update")
-
-    set_clauses.append("updated_at = CURRENT_TIMESTAMP")
-    params.extend([experience_id, oid])
-
-    with _get_db_connection() as conn:
-        cursor = conn.execute(
-            f"UPDATE experiences SET {', '.join(set_clauses)} WHERE id = ? AND oid = ?",
-            params,
-        )
-        if cursor.rowcount == 0:
+    with get_session() as session:
+        row = session.get(ExperienceRecord, experience_id)
+        if row is None or row.oid != oid:
             raise ProfileNotFoundError("Experience not found")
-        row = conn.execute(
-            "SELECT * FROM experiences WHERE id = ? AND oid = ?",
-            (experience_id, oid),
-        ).fetchone()
+
+        has_update = False
+
+        if "companyName" in updates:
+            row.company_name = _require_non_empty_text(updates["companyName"], "companyName")
+            has_update = True
+
+        if "startDate" in updates:
+            row.start_date = _normalize_date(updates["startDate"], "startDate")
+            has_update = True
+
+        if "endDate" in updates:
+            row.end_date = _normalize_date(updates["endDate"], "endDate", allow_null=True)
+            has_update = True
+
+        if "position" in updates:
+            row.position = _require_non_empty_text(updates["position"], "position")
+            has_update = True
+
+        if "description" in updates:
+            row.description = _require_non_empty_text(updates["description"], "description")
+            has_update = True
+
+        if "location" in updates:
+            row.location = _require_non_empty_text(updates["location"], "location")
+            has_update = True
+
+        if not has_update:
+            raise ProfileValidationError("No valid fields provided for update")
+
+        row.updated_at = _utc_now()
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+
     return _row_to_experience(row)
 
 
 def delete_experience_for_user(oid: str, experience_id: int) -> None:
     _delete_row_by_id_for_oid(
-        table="experiences",
+        model=ExperienceRecord,
         row_id=experience_id,
         oid=oid,
         not_found_message="Experience not found",
@@ -553,21 +538,20 @@ def create_achievement_for_user(
     if not normalized_name or not normalized_link or not normalized_organisation:
         raise ProfileValidationError("name, link and organisation are required")
 
-    normalized_date = _normalize_date(date, "date")
+    row = AchievementRecord(
+        oid=oid,
+        name=normalized_name,
+        link=normalized_link,
+        organisation=normalized_organisation,
+        date=_normalize_date(date, "date"),
+        created_at=_utc_now(),
+        updated_at=_utc_now(),
+    )
 
-    with _get_db_connection() as conn:
-        cursor = conn.execute(
-            """
-            INSERT INTO achievements (oid, name, link, organisation, date)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (oid, normalized_name, normalized_link, normalized_organisation, normalized_date),
-        )
-        achievement_id = cursor.lastrowid
-        row = conn.execute(
-            "SELECT * FROM achievements WHERE id = ? AND oid = ?",
-            (achievement_id, oid),
-        ).fetchone()
+    with get_session() as session:
+        session.add(row)
+        session.commit()
+        session.refresh(row)
 
     return _row_to_achievement(row)
 
@@ -589,26 +573,21 @@ def create_education_for_user(
     if not normalized_degree_name or not normalized_location or not normalized_cgpa_or_percentage:
         raise ProfileValidationError("degreeName, location and cgpaOrPercentage are required")
 
-    with _get_db_connection() as conn:
-        cursor = conn.execute(
-            """
-            INSERT INTO educations (oid, degree_name, location, start_year, end_year, cgpa_or_percentage)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                oid,
-                normalized_degree_name,
-                normalized_location,
-                normalized_start_year,
-                normalized_end_year,
-                normalized_cgpa_or_percentage,
-            ),
-        )
-        education_id = cursor.lastrowid
-        row = conn.execute(
-            "SELECT * FROM educations WHERE id = ? AND oid = ?",
-            (education_id, oid),
-        ).fetchone()
+    row = EducationRecord(
+        oid=oid,
+        degree_name=normalized_degree_name,
+        location=normalized_location,
+        start_year=normalized_start_year,
+        end_year=normalized_end_year,
+        cgpa_or_percentage=normalized_cgpa_or_percentage,
+        created_at=_utc_now(),
+        updated_at=_utc_now(),
+    )
+
+    with get_session() as session:
+        session.add(row)
+        session.commit()
+        session.refresh(row)
 
     return _row_to_education(row)
 
@@ -626,32 +605,27 @@ def create_resume_for_user(
     if not normalized_resume_name or not normalized_resume_description or not normalized_resume:
         raise ProfileValidationError("resumeName, resumeDescription and resume are required")
 
-    with _get_db_connection() as conn:
-        cursor = conn.execute(
-            """
-            INSERT INTO resumes (oid, user_reference, resume_name, resume_description, resume)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (
-                oid,
-                oid,
-                normalized_resume_name,
-                normalized_resume_description,
-                normalized_resume,
-            ),
-        )
-        resume_id = cursor.lastrowid
-        row = conn.execute(
-            "SELECT * FROM resumes WHERE id = ? AND oid = ?",
-            (resume_id, oid),
-        ).fetchone()
+    row = ResumeRecord(
+        oid=oid,
+        user_reference=oid,
+        resume_name=normalized_resume_name,
+        resume_description=normalized_resume_description,
+        resume=normalized_resume,
+        created_on=_utc_now(),
+        updated_at=_utc_now(),
+    )
+
+    with get_session() as session:
+        session.add(row)
+        session.commit()
+        session.refresh(row)
 
     return _row_to_resume(row)
 
 
 def get_achievement_for_user(oid: str, achievement_id: int) -> dict[str, Any]:
     row = _fetch_row_by_id_for_oid(
-        table="achievements",
+        model=AchievementRecord,
         row_id=achievement_id,
         oid=oid,
         not_found_message="Achievement not found",
@@ -661,7 +635,7 @@ def get_achievement_for_user(oid: str, achievement_id: int) -> dict[str, Any]:
 
 def get_education_for_user(oid: str, education_id: int) -> dict[str, Any]:
     row = _fetch_row_by_id_for_oid(
-        table="educations",
+        model=EducationRecord,
         row_id=education_id,
         oid=oid,
         not_found_message="Education not found",
@@ -671,7 +645,7 @@ def get_education_for_user(oid: str, education_id: int) -> dict[str, Any]:
 
 def get_resume_for_user(oid: str, resume_id: int) -> dict[str, Any]:
     row = _fetch_row_by_id_for_oid(
-        table="resumes",
+        model=ResumeRecord,
         row_id=resume_id,
         oid=oid,
         not_found_message="Resume not found",
@@ -687,42 +661,37 @@ def update_achievement_for_user(
     if not updates:
         raise ProfileValidationError("No fields provided for update")
 
-    set_clauses: list[str] = []
-    params: list[Any] = []
-
-    if "name" in updates:
-        set_clauses.append("name = ?")
-        params.append(_require_non_empty_text(updates["name"], "name"))
-
-    if "link" in updates:
-        set_clauses.append("link = ?")
-        params.append(_require_non_empty_text(updates["link"], "link"))
-
-    if "organisation" in updates:
-        set_clauses.append("organisation = ?")
-        params.append(_require_non_empty_text(updates["organisation"], "organisation"))
-
-    if "date" in updates:
-        set_clauses.append("date = ?")
-        params.append(_normalize_date(updates["date"], "date"))
-
-    if not set_clauses:
-        raise ProfileValidationError("No valid fields provided for update")
-
-    set_clauses.append("updated_at = CURRENT_TIMESTAMP")
-    params.extend([achievement_id, oid])
-
-    with _get_db_connection() as conn:
-        cursor = conn.execute(
-            f"UPDATE achievements SET {', '.join(set_clauses)} WHERE id = ? AND oid = ?",
-            params,
-        )
-        if cursor.rowcount == 0:
+    with get_session() as session:
+        row = session.get(AchievementRecord, achievement_id)
+        if row is None or row.oid != oid:
             raise ProfileNotFoundError("Achievement not found")
-        row = conn.execute(
-            "SELECT * FROM achievements WHERE id = ? AND oid = ?",
-            (achievement_id, oid),
-        ).fetchone()
+
+        has_update = False
+
+        if "name" in updates:
+            row.name = _require_non_empty_text(updates["name"], "name")
+            has_update = True
+
+        if "link" in updates:
+            row.link = _require_non_empty_text(updates["link"], "link")
+            has_update = True
+
+        if "organisation" in updates:
+            row.organisation = _require_non_empty_text(updates["organisation"], "organisation")
+            has_update = True
+
+        if "date" in updates:
+            row.date = _normalize_date(updates["date"], "date")
+            has_update = True
+
+        if not has_update:
+            raise ProfileValidationError("No valid fields provided for update")
+
+        row.updated_at = _utc_now()
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+
     return _row_to_achievement(row)
 
 
@@ -734,46 +703,41 @@ def update_education_for_user(
     if not updates:
         raise ProfileValidationError("No fields provided for update")
 
-    set_clauses: list[str] = []
-    params: list[Any] = []
-
-    if "degreeName" in updates:
-        set_clauses.append("degree_name = ?")
-        params.append(_require_non_empty_text(updates["degreeName"], "degreeName"))
-
-    if "location" in updates:
-        set_clauses.append("location = ?")
-        params.append(_require_non_empty_text(updates["location"], "location"))
-
-    if "startYear" in updates:
-        set_clauses.append("start_year = ?")
-        params.append(_normalize_date(updates["startYear"], "startYear"))
-
-    if "endYear" in updates:
-        set_clauses.append("end_year = ?")
-        params.append(_normalize_date(updates["endYear"], "endYear", allow_null=True))
-
-    if "cgpaOrPercentage" in updates:
-        set_clauses.append("cgpa_or_percentage = ?")
-        params.append(_require_non_empty_text(updates["cgpaOrPercentage"], "cgpaOrPercentage"))
-
-    if not set_clauses:
-        raise ProfileValidationError("No valid fields provided for update")
-
-    set_clauses.append("updated_at = CURRENT_TIMESTAMP")
-    params.extend([education_id, oid])
-
-    with _get_db_connection() as conn:
-        cursor = conn.execute(
-            f"UPDATE educations SET {', '.join(set_clauses)} WHERE id = ? AND oid = ?",
-            params,
-        )
-        if cursor.rowcount == 0:
+    with get_session() as session:
+        row = session.get(EducationRecord, education_id)
+        if row is None or row.oid != oid:
             raise ProfileNotFoundError("Education not found")
-        row = conn.execute(
-            "SELECT * FROM educations WHERE id = ? AND oid = ?",
-            (education_id, oid),
-        ).fetchone()
+
+        has_update = False
+
+        if "degreeName" in updates:
+            row.degree_name = _require_non_empty_text(updates["degreeName"], "degreeName")
+            has_update = True
+
+        if "location" in updates:
+            row.location = _require_non_empty_text(updates["location"], "location")
+            has_update = True
+
+        if "startYear" in updates:
+            row.start_year = _normalize_date(updates["startYear"], "startYear")
+            has_update = True
+
+        if "endYear" in updates:
+            row.end_year = _normalize_date(updates["endYear"], "endYear", allow_null=True)
+            has_update = True
+
+        if "cgpaOrPercentage" in updates:
+            row.cgpa_or_percentage = _require_non_empty_text(updates["cgpaOrPercentage"], "cgpaOrPercentage")
+            has_update = True
+
+        if not has_update:
+            raise ProfileValidationError("No valid fields provided for update")
+
+        row.updated_at = _utc_now()
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+
     return _row_to_education(row)
 
 
@@ -785,44 +749,39 @@ def update_resume_for_user(
     if not updates:
         raise ProfileValidationError("No fields provided for update")
 
-    set_clauses: list[str] = []
-    params: list[Any] = []
-
-    if "resumeName" in updates:
-        set_clauses.append("resume_name = ?")
-        params.append(_require_non_empty_text(updates["resumeName"], "resumeName"))
-
-    if "resumeDescription" in updates:
-        set_clauses.append("resume_description = ?")
-        params.append(_require_non_empty_text(updates["resumeDescription"], "resumeDescription"))
-
-    if "resume" in updates:
-        set_clauses.append("resume = ?")
-        params.append(_require_non_empty_text(updates["resume"], "resume"))
-
-    if not set_clauses:
-        raise ProfileValidationError("No valid fields provided for update")
-
-    set_clauses.append("updated_at = CURRENT_TIMESTAMP")
-    params.extend([resume_id, oid])
-
-    with _get_db_connection() as conn:
-        cursor = conn.execute(
-            f"UPDATE resumes SET {', '.join(set_clauses)} WHERE id = ? AND oid = ?",
-            params,
-        )
-        if cursor.rowcount == 0:
+    with get_session() as session:
+        row = session.get(ResumeRecord, resume_id)
+        if row is None or row.oid != oid:
             raise ProfileNotFoundError("Resume not found")
-        row = conn.execute(
-            "SELECT * FROM resumes WHERE id = ? AND oid = ?",
-            (resume_id, oid),
-        ).fetchone()
+
+        has_update = False
+
+        if "resumeName" in updates:
+            row.resume_name = _require_non_empty_text(updates["resumeName"], "resumeName")
+            has_update = True
+
+        if "resumeDescription" in updates:
+            row.resume_description = _require_non_empty_text(updates["resumeDescription"], "resumeDescription")
+            has_update = True
+
+        if "resume" in updates:
+            row.resume = _require_non_empty_text(updates["resume"], "resume")
+            has_update = True
+
+        if not has_update:
+            raise ProfileValidationError("No valid fields provided for update")
+
+        row.updated_at = _utc_now()
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+
     return _row_to_resume(row)
 
 
 def delete_achievement_for_user(oid: str, achievement_id: int) -> None:
     _delete_row_by_id_for_oid(
-        table="achievements",
+        model=AchievementRecord,
         row_id=achievement_id,
         oid=oid,
         not_found_message="Achievement not found",
@@ -831,7 +790,7 @@ def delete_achievement_for_user(oid: str, achievement_id: int) -> None:
 
 def delete_education_for_user(oid: str, education_id: int) -> None:
     _delete_row_by_id_for_oid(
-        table="educations",
+        model=EducationRecord,
         row_id=education_id,
         oid=oid,
         not_found_message="Education not found",
@@ -840,7 +799,7 @@ def delete_education_for_user(oid: str, education_id: int) -> None:
 
 def delete_resume_for_user(oid: str, resume_id: int) -> None:
     _delete_row_by_id_for_oid(
-        table="resumes",
+        model=ResumeRecord,
         row_id=resume_id,
         oid=oid,
         not_found_message="Resume not found",

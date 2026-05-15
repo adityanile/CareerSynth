@@ -29,7 +29,7 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     def on_startup() -> None:
-        startup_db(get_settings().sqlite_db_path)
+        startup_db(get_settings())
 
     return app
 

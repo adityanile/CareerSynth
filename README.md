@@ -73,7 +73,11 @@ ENTRA_REQUIRED_SCOPE=User
 # Optional: comma-separated tenant allow-list (if unset, all tenants accepted)
 # ENTRA_ALLOWED_TENANTS=<tenant-guid-1>,<tenant-guid-2>
 
-# Optional: SQLite path
+# Database mode (default uses PostgreSQL)
+USE_SQLITE=false
+DATABASE_URL=postgresql+psycopg://<user>:<password>@<host>:5432/<db_name>
+
+# Optional (used only when USE_SQLITE=true)
 SQLITE_DB_PATH=careersynth.db
 ```
 
@@ -188,6 +192,13 @@ Install Python dependencies:
 
 ```bash
 pip install -r docker/requirements.txt
+```
+
+Run DB migrations (PostgreSQL mode):
+
+```bash
+cd backend
+alembic upgrade head
 ```
 
 Run backend:
