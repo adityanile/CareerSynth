@@ -47,10 +47,24 @@ interface AchievementStateItem {
   updatedAt?: string;
 }
 
+interface ProfileStateItem {
+  name?: string;
+  role?: string;
+  contact?: string;
+  location?: string;
+  linkedinUrl?: string;
+  linkedinurl?: string;
+  additionalUrls?: string[];
+  additionalurls?: string[];
+}
+
 interface ResumeState {
   projects?: ProjectStateItem[];
   experiences?: ExperienceStateItem[];
   achievements?: AchievementStateItem[];
+  summary?: string;
+  skills?: string[];
+  profile?: ProfileStateItem;
 }
 
 interface ProjectFormState {
@@ -73,6 +87,15 @@ interface AchievementFormState {
   organisation: string;
   date: string;
   link: string;
+}
+
+interface ProfileFormState {
+  name: string;
+  role: string;
+  contact: string;
+  location: string;
+  linkedinUrl: string;
+  additionalUrls: string;
 }
 
 function formatThreadTime(thread: Thread): string {
@@ -347,13 +370,44 @@ function normalizeArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
 }
 
+function normalizeProfile(value: unknown): Required<ProfileStateItem> {
+  const payload = asRecord(value);
+  return {
+    name: asString(payload.name) ?? "",
+    role: asString(payload.role) ?? "",
+    contact: asString(payload.contact) ?? "",
+    location: asString(payload.location) ?? "",
+    linkedinUrl: asString(payload.linkedinUrl) ?? asString(payload.linkedinurl) ?? "",
+    linkedinurl: asString(payload.linkedinurl) ?? "",
+    additionalUrls: normalizeArray<string>(payload.additionalUrls ?? payload.additionalurls),
+    additionalurls: normalizeArray<string>(payload.additionalurls),
+  };
+}
+
 function ResumeStatePanel({ agentId }: { agentId: string }) {
   const { agent } = useAgent({ agentId });
   const state = (agent.state ?? {}) as ResumeState;
   const projects = normalizeArray<ProjectStateItem>(state.projects);
   const experiences = normalizeArray<ExperienceStateItem>(state.experiences);
   const achievements = normalizeArray<AchievementStateItem>(state.achievements);
-  const hasAnyState = projects.length > 0 || experiences.length > 0 || achievements.length > 0;
+  const summary = asString(state.summary) ?? "";
+  const skills = normalizeArray<string>(state.skills);
+  const profile = normalizeProfile(state.profile);
+  const hasProfileData = Boolean(
+    profile.name ||
+      profile.role ||
+      profile.contact ||
+      profile.location ||
+      profile.linkedinUrl ||
+      profile.additionalUrls.length,
+  );
+  const hasAnyState =
+    projects.length > 0 ||
+    experiences.length > 0 ||
+    achievements.length > 0 ||
+    Boolean(summary) ||
+    skills.length > 0 ||
+    hasProfileData;
   const [editingProjectIndex, setEditingProjectIndex] = useState<number | null>(null);
   const [editingExperienceIndex, setEditingExperienceIndex] = useState<number | null>(null);
   const [editingAchievementIndex, setEditingAchievementIndex] = useState<number | null>(null);
@@ -375,6 +429,19 @@ function ResumeStatePanel({ agentId }: { agentId: string }) {
     organisation: "",
     date: "",
     link: "",
+  });
+  const [isEditingSummary, setIsEditingSummary] = useState(false);
+  const [summaryDraft, setSummaryDraft] = useState<string>("");
+  const [isEditingSkills, setIsEditingSkills] = useState(false);
+  const [skillsDraft, setSkillsDraft] = useState<string>("");
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState<ProfileFormState>({
+    name: "",
+    role: "",
+    contact: "",
+    location: "",
+    linkedinUrl: "",
+    additionalUrls: "",
   });
 
   const applyStatePatch = (patch: Partial<ResumeState>) => {
@@ -482,6 +549,93 @@ function ResumeStatePanel({ agentId }: { agentId: string }) {
     resetAchievementForm();
   };
 
+  const startSummaryEdit = () => {
+    setIsEditingSummary(true);
+    setSummaryDraft(summary);
+  };
+
+  const cancelSummaryEdit = () => {
+    setIsEditingSummary(false);
+    setSummaryDraft("");
+  };
+
+  const saveSummary = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const nextSummary = summaryDraft.trim();
+    if (!nextSummary) {
+      return;
+    }
+    applyStatePatch({ summary: nextSummary });
+    cancelSummaryEdit();
+  };
+
+  const startSkillsEdit = () => {
+    setIsEditingSkills(true);
+    setSkillsDraft(skills.join(", "));
+  };
+
+  const cancelSkillsEdit = () => {
+    setIsEditingSkills(false);
+    setSkillsDraft("");
+  };
+
+  const saveSkills = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const nextSkills = splitCsv(skillsDraft);
+    if (nextSkills.length === 0) {
+      return;
+    }
+    applyStatePatch({ skills: nextSkills });
+    cancelSkillsEdit();
+  };
+
+  const startProfileEdit = () => {
+    setIsEditingProfile(true);
+    setProfileForm({
+      name: profile.name,
+      role: profile.role,
+      contact: profile.contact,
+      location: profile.location,
+      linkedinUrl: profile.linkedinUrl,
+      additionalUrls: profile.additionalUrls.join(", "),
+    });
+  };
+
+  const cancelProfileEdit = () => {
+    setIsEditingProfile(false);
+    setProfileForm({
+      name: "",
+      role: "",
+      contact: "",
+      location: "",
+      linkedinUrl: "",
+      additionalUrls: "",
+    });
+  };
+
+  const saveProfile = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const nextProfile = {
+      name: profileForm.name.trim(),
+      role: profileForm.role.trim(),
+      contact: profileForm.contact.trim(),
+      location: profileForm.location.trim(),
+      linkedinUrl: profileForm.linkedinUrl.trim(),
+      additionalUrls: splitCsv(profileForm.additionalUrls),
+    };
+    if (
+      !nextProfile.name ||
+      !nextProfile.role ||
+      !nextProfile.contact ||
+      !nextProfile.location ||
+      !nextProfile.linkedinUrl
+    ) {
+      return;
+    }
+    applyStatePatch({ profile: nextProfile });
+    cancelProfileEdit();
+  };
+
   return (
     <aside className={styles.resumeStatePanel}>
       <div className={styles.resumeStateHeader}>
@@ -490,6 +644,249 @@ function ResumeStatePanel({ agentId }: { agentId: string }) {
       </div>
 
       <div className={styles.stateGrid}>
+        <StateSection
+          title="Summary"
+          count={1}
+          emptyLabel="No summary"
+          items={[summary]}
+          renderItem={(item) =>
+            isEditingSummary ? (
+              <form className={styles.inlineForm} onSubmit={saveSummary}>
+                <label className={styles.inlineLabel}>
+                  Summary
+                  <textarea
+                    className={styles.inlineTextarea}
+                    value={summaryDraft}
+                    onChange={(event) => setSummaryDraft(event.target.value)}
+                  />
+                </label>
+                <div className={styles.inlineActions}>
+                  <button type="submit" className={styles.inlineActionPrimary}>
+                    Save Summary
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.inlineActionSecondary}
+                    onClick={cancelSummaryEdit}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <p className={styles.payloadLine}>
+                  <span className={styles.payloadValue}>{item || "Not provided"}</span>
+                </p>
+                <div className={styles.payloadActions}>
+                  <button
+                    type="button"
+                    className={styles.payloadActionButton}
+                    onClick={startSummaryEdit}
+                  >
+                    {item ? "Edit" : "Set"}
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.payloadActionButton} ${styles.deleteActionButton}`}
+                    onClick={() => applyStatePatch({ summary: "" })}
+                    disabled={!item}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </>
+            )
+          }
+        />
+        <StateSection
+          title="Profile"
+          count={1}
+          emptyLabel="No profile"
+          items={[profile]}
+          renderItem={(item) =>
+            isEditingProfile ? (
+              <form className={styles.inlineForm} onSubmit={saveProfile}>
+                <label className={styles.inlineLabel}>
+                  Name
+                  <input
+                    className={styles.inlineInput}
+                    value={profileForm.name}
+                    onChange={(event) =>
+                      setProfileForm((current) => ({ ...current, name: event.target.value }))
+                    }
+                  />
+                </label>
+                <label className={styles.inlineLabel}>
+                  Role
+                  <input
+                    className={styles.inlineInput}
+                    value={profileForm.role}
+                    onChange={(event) =>
+                      setProfileForm((current) => ({ ...current, role: event.target.value }))
+                    }
+                  />
+                </label>
+                <label className={styles.inlineLabel}>
+                  Contact
+                  <input
+                    className={styles.inlineInput}
+                    value={profileForm.contact}
+                    onChange={(event) =>
+                      setProfileForm((current) => ({ ...current, contact: event.target.value }))
+                    }
+                  />
+                </label>
+                <label className={styles.inlineLabel}>
+                  Location
+                  <input
+                    className={styles.inlineInput}
+                    value={profileForm.location}
+                    onChange={(event) =>
+                      setProfileForm((current) => ({ ...current, location: event.target.value }))
+                    }
+                  />
+                </label>
+                <label className={styles.inlineLabel}>
+                  LinkedIn URL
+                  <input
+                    className={styles.inlineInput}
+                    value={profileForm.linkedinUrl}
+                    onChange={(event) =>
+                      setProfileForm((current) => ({
+                        ...current,
+                        linkedinUrl: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label className={styles.inlineLabel}>
+                  Additional URLs (comma separated)
+                  <input
+                    className={styles.inlineInput}
+                    value={profileForm.additionalUrls}
+                    onChange={(event) =>
+                      setProfileForm((current) => ({
+                        ...current,
+                        additionalUrls: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <div className={styles.inlineActions}>
+                  <button type="submit" className={styles.inlineActionPrimary}>
+                    Save Profile
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.inlineActionSecondary}
+                    onClick={cancelProfileEdit}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <PayloadField label="Name" value={item.name} />
+                <PayloadField label="Role" value={item.role} />
+                <PayloadField label="Contact" value={item.contact} />
+                <PayloadField label="Location" value={item.location} />
+                <PayloadField label="LinkedIn" value={item.linkedinUrl || item.linkedinurl} />
+                <PayloadTagList
+                  label="Additional URLs"
+                  values={normalizeArray<string>(item.additionalUrls ?? item.additionalurls)}
+                  emptyLabel="No additional URLs provided"
+                />
+                <div className={styles.payloadActions}>
+                  <button
+                    type="button"
+                    className={styles.payloadActionButton}
+                    onClick={startProfileEdit}
+                  >
+                    {hasProfileData ? "Edit" : "Set"}
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.payloadActionButton} ${styles.deleteActionButton}`}
+                    onClick={() =>
+                      applyStatePatch({
+                        profile: {
+                          name: "",
+                          role: "",
+                          contact: "",
+                          location: "",
+                          linkedinUrl: "",
+                          additionalUrls: [],
+                        },
+                      })
+                    }
+                    disabled={!hasProfileData}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </>
+            )
+          }
+        />
+        <StateSection
+          title="Skills"
+          count={skills.length}
+          emptyLabel="No skills"
+          items={[skills]}
+          renderItem={(item) =>
+            isEditingSkills ? (
+              <form className={styles.inlineForm} onSubmit={saveSkills}>
+                <label className={styles.inlineLabel}>
+                  Skills (comma separated)
+                  <input
+                    className={styles.inlineInput}
+                    value={skillsDraft}
+                    onChange={(event) => setSkillsDraft(event.target.value)}
+                  />
+                </label>
+                <div className={styles.inlineActions}>
+                  <button type="submit" className={styles.inlineActionPrimary}>
+                    Save Skills
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.inlineActionSecondary}
+                    onClick={cancelSkillsEdit}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <PayloadTagList
+                  label="Skills"
+                  values={item}
+                  emptyLabel="No skills provided"
+                />
+                <div className={styles.payloadActions}>
+                  <button
+                    type="button"
+                    className={styles.payloadActionButton}
+                    onClick={startSkillsEdit}
+                  >
+                    {item.length > 0 ? "Edit" : "Set"}
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.payloadActionButton} ${styles.deleteActionButton}`}
+                    onClick={() => applyStatePatch({ skills: [] })}
+                    disabled={item.length === 0}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </>
+            )
+          }
+        />
         <StateSection
           title="Projects"
           count={projects.length}
@@ -1005,6 +1402,44 @@ function summarizeToolCall(
         status === "complete"
           ? `Added achievement "${achievementName}" to shared resume state.`
           : `Updating shared state for achievement "${achievementName}".`,
+    };
+  }
+
+  if (name === "add_summary") {
+    const payload = asRecord(parameters);
+    const summary = asString(payload.summary) ?? "summary";
+    return {
+      title: `${statusPrefix}: add_summary`,
+      body:
+        status === "complete"
+          ? `Updated shared resume summary to "${summary}".`
+          : `Updating shared resume summary.`,
+    };
+  }
+
+  if (name === "add_profile") {
+    const payload = asRecord(parameters);
+    const profile = asRecord(payload.profile);
+    const profileName = asString(profile.name) ?? "profile";
+    const profileRole = asString(profile.role);
+    return {
+      title: `${statusPrefix}: add_profile`,
+      body:
+        status === "complete"
+          ? `Updated shared resume profile for "${profileName}${profileRole ? ` (${profileRole})` : ""}".`
+          : `Updating shared resume profile for "${profileName}".`,
+    };
+  }
+
+  if (name === "add_skills") {
+    const payload = asRecord(parameters);
+    const skills = normalizeArray<string>(payload.skills);
+    return {
+      title: `${statusPrefix}: add_skills`,
+      body:
+        status === "complete"
+          ? `Updated shared resume skills (${skills.length}).`
+          : "Updating shared resume skills.",
     };
   }
 

@@ -20,6 +20,16 @@ def _empty_resume_state_payload() -> dict[str, Any]:
         "projects": [],
         "experiences": [],
         "achievements": [],
+        "summary": "",
+        "skills": [],
+        "profile": {
+            "name": "",
+            "role": "",
+            "contact": "",
+            "location": "",
+            "linkedinUrl": "",
+            "additionalUrls": [],
+        },
     }
 
 
@@ -61,10 +71,24 @@ def _get_cached_resume_state(key: CacheKey) -> dict[str, Any]:
     projects = cached_state.get("projects")
     experiences = cached_state.get("experiences")
     achievements = cached_state.get("achievements")
+    summary = cached_state.get("summary")
+    skills = cached_state.get("skills")
+    profile = cached_state.get("profile")
+    profile_payload = profile if isinstance(profile, dict) else {}
     return {
         "projects": list(projects) if isinstance(projects, list) else [],
         "experiences": list(experiences) if isinstance(experiences, list) else [],
         "achievements": list(achievements) if isinstance(achievements, list) else [],
+        "summary": str(summary).strip() if isinstance(summary, str) else "",
+        "skills": _normalize_string_list(skills),
+        "profile": {
+            "name": str(profile_payload.get("name") or "").strip(),
+            "role": str(profile_payload.get("role") or "").strip(),
+            "contact": str(profile_payload.get("contact") or "").strip(),
+            "location": str(profile_payload.get("location") or "").strip(),
+            "linkedinUrl": str(profile_payload.get("linkedinUrl") or "").strip(),
+            "additionalUrls": _normalize_string_list(profile_payload.get("additionalUrls")),
+        },
     }
 
 
@@ -76,6 +100,33 @@ def _append_to_state_list(cache_key: CacheKey, key: str, item: dict[str, Any]) -
         state_payload[key] = updated_list
         resume_state_cache[cache_key] = state_payload
         return updated_list
+
+
+def _set_state_string(cache_key: CacheKey, key: str, value: str) -> str:
+    lock = _get_lock_for_cache_key(cache_key)
+    with lock:
+        state_payload = _get_cached_resume_state(cache_key)
+        state_payload[key] = value
+        resume_state_cache[cache_key] = state_payload
+        return value
+
+
+def _set_state_object(cache_key: CacheKey, key: str, value: dict[str, Any]) -> dict[str, Any]:
+    lock = _get_lock_for_cache_key(cache_key)
+    with lock:
+        state_payload = _get_cached_resume_state(cache_key)
+        state_payload[key] = value
+        resume_state_cache[cache_key] = state_payload
+        return value
+
+
+def _set_state_list(cache_key: CacheKey, key: str, value: list[str]) -> list[str]:
+    lock = _get_lock_for_cache_key(cache_key)
+    with lock:
+        state_payload = _get_cached_resume_state(cache_key)
+        state_payload[key] = value
+        resume_state_cache[cache_key] = state_payload
+        return value
 
 
 @tool(
@@ -174,4 +225,84 @@ def add_achievement_to_resume_tool(achievement: dict[str, Any] | None = None) ->
     return state_update(
         text=f"Added achievement '{achievement_record['name']}' to shared resume state list.",
         state={"achievements": updated_achievements},
+    )
+
+
+@tool(
+    name="add_summary",
+    description="Set shared resume summary using a non-empty string value.",
+)
+def add_summary_tool(summary: str | None = None) -> Any:
+    summary_value = _normalize_required_string(summary, "summary")
+
+    oid = require_current_oid()
+    thread_id = require_current_thread_id()
+    updated_summary = _set_state_string(
+        _cache_key(oid, thread_id),
+        "summary",
+        summary_value,
+    )
+    return state_update(
+        text="Updated summary in shared resume state.",
+        state={"summary": updated_summary},
+    )
+
+
+@tool(
+    name="add_profile",
+    description=(
+        "Set shared resume profile using a profile object with "
+        "name, role, contact, location, linkedinUrl, and additionalUrls."
+    ),
+)
+def add_profile_tool(profile: dict[str, Any] | None = None) -> Any:
+    if not isinstance(profile, dict):
+        raise ValueError("profile object is required")
+
+    profile_record = {
+        "name": _normalize_required_string(profile.get("name"), "name"),
+        "role": _normalize_required_string(profile.get("role"), "role"),
+        "contact": _normalize_required_string(profile.get("contact"), "contact"),
+        "location": _normalize_required_string(profile.get("location"), "location"),
+        "linkedinUrl": _normalize_required_string(
+            profile.get("linkedinUrl") or profile.get("linkedinurl"),
+            "linkedinUrl",
+        ),
+        "additionalUrls": _normalize_string_list(
+            profile.get("additionalUrls") or profile.get("additionalurls"),
+        ),
+    }
+
+    oid = require_current_oid()
+    thread_id = require_current_thread_id()
+    updated_profile = _set_state_object(
+        _cache_key(oid, thread_id),
+        "profile",
+        profile_record,
+    )
+    return state_update(
+        text=f"Updated profile in shared resume state for '{profile_record['name']}'.",
+        state={"profile": updated_profile},
+    )
+
+
+@tool(
+    name="add_skills",
+    description="Set shared resume skills using a non-empty list of strings.",
+)
+def add_skills_tool(skills: list[str] | str | None = None) -> Any:
+    skills_list = _normalize_string_list(skills)
+    if not skills_list:
+        raise ValueError("skills are required")
+
+    oid = require_current_oid()
+    thread_id = require_current_thread_id()
+    updated_skills = _set_state_list(
+        _cache_key(oid, thread_id),
+        "skills",
+        skills_list,
+    )
+    return state_update(
+        text=f"Updated {len(updated_skills)} skills in shared resume state.",
+        state={"skills": updated_skills},
     )

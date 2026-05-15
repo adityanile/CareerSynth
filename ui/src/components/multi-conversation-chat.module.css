@@ -251,7 +251,7 @@
 
 .stateGrid {
   display: grid;
-  gap: 14px;
+  gap: 10px;
   grid-template-columns: 1fr;
 }
 
@@ -260,8 +260,8 @@
   border: 1px solid #dbe3ef;
   border-radius: 10px;
   box-shadow: 0 1px 2px rgba(17, 24, 39, 0.05);
-  min-height: 110px;
-  padding: 12px;
+  min-height: 100px;
+  padding: 10px;
 }
 
 .stateCardHeader {
@@ -269,8 +269,8 @@
   border-bottom: 1px solid #e5e7eb;
   display: flex;
   justify-content: space-between;
-  margin-bottom: 10px;
-  padding-bottom: 8px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
 }
 
 .stateCardTitle {
@@ -303,7 +303,7 @@
 .payloadList {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -315,20 +315,22 @@
   border-radius: 8px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding: 8px;
+  gap: 4px;
+  padding: 6px;
 }
 
 .payloadTitle {
   color: #111827;
   font-size: 0.76rem;
   font-weight: 600;
+  margin: 0;
 }
 
 .payloadLine {
   color: #1f2937;
   font-size: 0.72rem;
   line-height: 1.35;
+  margin: 0;
 }
 
 .payloadLabel {
@@ -387,9 +389,9 @@
   border-top: 1px dashed #d1d5db;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 10px;
-  padding-top: 10px;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
 }
 
 .inlineLabel {

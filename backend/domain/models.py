@@ -36,10 +36,22 @@ class AchievementState(BaseModel):
     updatedAt: str
 
 
+class ProfileState(BaseModel):
+    name: str = ""
+    role: str = ""
+    contact: str = ""
+    location: str = ""
+    linkedinUrl: str = ""
+    additionalUrls: list[str] = Field(default_factory=list)
+
+
 class ResumeState(BaseModel):
     projects: list[ProjectState] = Field(default_factory=list)
     experiences: list[ExperienceState] = Field(default_factory=list)
     achievements: list[AchievementState] = Field(default_factory=list)
+    summary: str = ""
+    skills: list[str] = Field(default_factory=list)
+    profile: ProfileState = Field(default_factory=ProfileState)
 
 
 class ProjectCreate(BaseModel):

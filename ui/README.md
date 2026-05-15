@@ -66,7 +66,17 @@ The UI expects the AG-UI state shape:
 {
   "projects": [],
   "experiences": [],
-  "achievements": []
+  "achievements": [],
+  "summary": "",
+  "skills": [],
+  "profile": {
+    "name": "",
+    "role": "",
+    "contact": "",
+    "location": "",
+    "linkedinUrl": "",
+    "additionalUrls": []
+  }
 }
 ```
 
@@ -75,6 +85,9 @@ Current backend pattern (in `server.py` + `resume_state_tools.py`) uses:
 - `add_project_to_resume` with argument `project`
 - `add_experience_to_resume` with argument `experience`
 - `add_achievement_to_resume` with argument `achievement`
+- `add_summary` with argument `summary` (string)
+- `add_skills` with argument `skills` (string[])
+- `add_profile` with argument `profile` (object)
 
 These tools append list items to backend-maintained shared state and stream updates via AG-UI.
 

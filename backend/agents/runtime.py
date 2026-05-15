@@ -28,6 +28,9 @@ from agents.tools.resume_pdf_tool import generate_resume_pdf
 from agents.tools.resume_state_tools import (
     add_achievement_to_resume_tool,
     add_experience_to_resume_tool,
+    add_profile_tool,
+    add_skills_tool,
+    add_summary_tool,
     add_project_to_resume_tool,
 )
 from agents.middleware.tool_call_sequence_middleware import ToolCallSequenceRepairMiddleware
@@ -42,6 +45,9 @@ Tool usage rules:
   - `add_project_to_resume`
   - `add_experience_to_resume`
   - `add_achievement_to_resume`
+  - `add_summary`
+  - `add_skills`
+  - `add_profile`
 - If the user explicitly says "create", "save", "store", or "add" for project/experience/achievement in system/database terms (and does not say resume), use only the matching create tool:
   - `create_project`
   - `create_experience`
@@ -59,6 +65,9 @@ Required fields before create tool calls:
 - `add_project_to_resume`: `project` with `projectName`, `description`, `techStack`
 - `add_experience_to_resume`: `experience` with `companyName`, `position`, `description`, `startDate`, `location` (optional `endDate`)
 - `add_achievement_to_resume`: `achievement` with `name`, `organisation`, `date`, `link`
+- `add_summary`: `summary` string
+- `add_skills`: `skills` list of strings
+- `add_profile`: `profile` with `name`, `role`, `contact`, `location`, `linkedinUrl`, `additionalUrls`
 - `create_project`: `name`, `description`, `tech_stack`, `urls`, `tags`
 - `create_experience`: `company_name`, `position`, `start_date`, `end_date` (nullable), `description`, `location`
 - `create_achievement`: `name`, `link`, `organisation`, `date`
@@ -87,6 +96,18 @@ PREDICTED_STATE_CONFIG: dict[str, dict[str, str | None]] = {
         "tool": "add_achievement_to_resume",
         "tool_argument": "achievement",
     },
+    "summary": {
+        "tool": "add_summary",
+        "tool_argument": "summary",
+    },
+    "skills": {
+        "tool": "add_skills",
+        "tool_argument": "skills",
+    },
+    "profile": {
+        "tool": "add_profile",
+        "tool_argument": "profile",
+    },
 }
 
 
@@ -110,6 +131,9 @@ def _build_agent_framework_agent() -> AgentFrameworkAgent:
             add_project_to_resume_tool,
             add_experience_to_resume_tool,
             add_achievement_to_resume_tool,
+            add_summary_tool,
+            add_skills_tool,
+            add_profile_tool,
             create_project_from_context_tool,
             query_projects_from_context_tool,
             create_experience_from_context_tool,
@@ -138,6 +162,30 @@ def _build_agent_framework_agent() -> AgentFrameworkAgent:
                 "type": "array",
                 "description": "Current list of resume achievements",
                 "items": {"type": "object"},
+            },
+            "summary": {
+                "type": "string",
+                "description": "Current resume summary statement",
+            },
+            "skills": {
+                "type": "array",
+                "description": "Current list of resume skills",
+                "items": {"type": "string"},
+            },
+            "profile": {
+                "type": "object",
+                "description": "Current resume profile block",
+                "properties": {
+                    "name": {"type": "string"},
+                    "role": {"type": "string"},
+                    "contact": {"type": "string"},
+                    "location": {"type": "string"},
+                    "linkedinUrl": {"type": "string"},
+                    "additionalUrls": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                },
             },
         },
         predict_state_config=PREDICTED_STATE_CONFIG,
