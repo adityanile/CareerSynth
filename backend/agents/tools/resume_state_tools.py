@@ -6,7 +6,7 @@ from typing import Any
 from agent_framework import tool
 from agent_framework.ag_ui import state_update
 
-from agent_request_context import require_current_oid, require_current_thread_id
+from agents.context import require_current_oid, require_current_thread_id
 
 CacheKey = tuple[str, str]
 

@@ -1,0 +1,2 @@
+"""CareerSynth backend package."""
+

@@ -3,9 +3,9 @@ from typing import Any
 
 from agent_framework import tool
 
-from agent_request_context import require_current_oid
-from project_tools import create_project_for_user, list_projects_for_user
-from tool_response import format_tool_failure
+from agents.context import require_current_oid
+from domain.repository import create_project_for_user, list_projects_for_user
+from agents.tools.tool_response import format_tool_failure
 
 
 def _tool_success(data: Any) -> dict[str, Any]:

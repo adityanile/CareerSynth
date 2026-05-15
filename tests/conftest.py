@@ -122,8 +122,9 @@ def _install_stub_modules(monkeypatch: pytest.MonkeyPatch) -> None:
 def app_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     _install_stub_modules(monkeypatch)
     repo_root = Path(__file__).resolve().parents[1]
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
+    backend_root = repo_root / "backend"
+    if str(backend_root) not in sys.path:
+        sys.path.insert(0, str(backend_root))
 
     monkeypatch.setenv("ENTRA_TENANT_ID", "tenant")
     monkeypatch.setenv("ENTRA_CLIENT_ID", "client")

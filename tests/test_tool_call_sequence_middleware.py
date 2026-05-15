@@ -17,7 +17,7 @@ async def _run_middleware(middleware, context):
 
 def test_middleware_supports_parallel_tool_calls_with_batched_results(app_module):
     from agent_framework import ChatContext, Message
-    from tool_call_sequence_middleware import ToolCallSequenceRepairMiddleware
+    from agents.middleware.tool_call_sequence_middleware import ToolCallSequenceRepairMiddleware
 
     context = ChatContext()
     assistant = Message(
@@ -53,7 +53,7 @@ def test_middleware_supports_parallel_tool_calls_with_batched_results(app_module
 
 def test_middleware_matches_mixed_tool_result_layouts(app_module):
     from agent_framework import ChatContext, Message
-    from tool_call_sequence_middleware import ToolCallSequenceRepairMiddleware
+    from agents.middleware.tool_call_sequence_middleware import ToolCallSequenceRepairMiddleware
 
     context = ChatContext()
     assistant = Message(

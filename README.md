@@ -3,15 +3,16 @@
 CareerSynth is a resume creation system built on the Microsoft Agent Framework + AG-UI.
 
 It includes:
-- A backend Resume Creator agent (`server.py`)
-- A tool that compiles LaTeX resumes to PDF and uploads to Azure Blob (`resume_pdf_tool.py`)
+- A backend Resume Creator agent (`backend/server.py`)
+- A tool that compiles LaTeX resumes to PDF and uploads to Azure Blob (`backend/agents/tools/resume_pdf_tool.py`)
 - A helper CLI compiler/uploader script (`compile_tex.py`)
 - A Next.js chat UI (`ui/`)
 
 ## Project Structure
 
-- `server.py`: FastAPI + AG-UI endpoint, agent definition, tool registration.
-- `resume_pdf_tool.py`: `@tool()` implementation `generate_resume_pdf(...)`.
+- `backend/server.py`: backend entrypoint for FastAPI + AG-UI endpoint.
+- `backend/app.py`: app composition (routers, auth/OpenAPI wiring, startup).
+- `backend/agents/tools/resume_pdf_tool.py`: `@tool()` implementation `generate_resume_pdf(...)`.
 - `compile_tex.py`: CLI utility to compile a local `.tex` file and upload the resulting PDF.
 - `docker/backend.dockerfile`: Backend image with Python + TeX Live + dependencies.
 - `docker/requirements.txt`: Backend Python dependencies.
@@ -192,7 +193,7 @@ pip install -r docker/requirements.txt
 Run backend:
 
 ```bash
-python server.py
+python backend/server.py
 ```
 
 Backend starts on:

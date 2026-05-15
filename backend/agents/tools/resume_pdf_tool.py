@@ -8,7 +8,7 @@ from typing import Annotated
 
 from agent_framework import tool
 from azure.storage.blob import BlobServiceClient, ContentSettings
-from tool_response import format_tool_failure
+from agents.tools.tool_response import format_tool_failure
 
 
 def _required_env(name: str) -> str:
