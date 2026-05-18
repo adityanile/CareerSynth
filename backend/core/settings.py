@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 from dotenv import load_dotenv
-from fastapi_microsoft_identity import initialize
 
 
 load_dotenv()
@@ -17,10 +16,10 @@ def _read_bool(value: str | None, *, default: bool) -> bool:
 
 @dataclass(frozen=True)
 class Settings:
-    entra_tenant_id: str
-    entra_client_id: str
-    entra_required_scope: str
-    entra_allowed_tenants: list[str]
+    clerk_secret_key: str
+    clerk_jwt_key: str | None
+    clerk_authorized_parties: list[str]
+    clerk_audience: list[str]
     use_sqlite: bool
     sqlite_db_path: str
     database_url: str | None
@@ -33,15 +32,15 @@ class Settings:
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    entra_tenant_id = os.getenv("ENTRA_TENANT_ID")
-    entra_client_id = os.getenv("ENTRA_CLIENT_ID")
-    if not entra_tenant_id or not entra_client_id:
-        raise RuntimeError("ENTRA_TENANT_ID and ENTRA_CLIENT_ID are required.")
+    clerk_secret_key = os.getenv("CLERK_SECRET_KEY")
+    if not clerk_secret_key:
+        raise RuntimeError("CLERK_SECRET_KEY is required.")
 
-    initialize(tenant_id_=entra_tenant_id, client_id_=entra_client_id)
+    raw_authorized_parties = os.getenv("CLERK_AUTHORIZED_PARTIES", "")
+    clerk_authorized_parties = [party.strip() for party in raw_authorized_parties.split(",") if party.strip()]
 
-    raw_allowed_tenants = os.getenv("ENTRA_ALLOWED_TENANTS", "")
-    allowed_tenants = [tenant.strip() for tenant in raw_allowed_tenants.split(",") if tenant.strip()]
+    raw_audience = os.getenv("CLERK_AUDIENCE", "")
+    clerk_audience = [value.strip() for value in raw_audience.split(",") if value.strip()]
 
     use_sqlite = _read_bool(os.getenv("USE_SQLITE"), default=False)
     sqlite_db_path = os.getenv("SQLITE_DB_PATH", "careersynth.db")
@@ -51,10 +50,10 @@ def get_settings() -> Settings:
         raise RuntimeError("DATABASE_URL is required when USE_SQLITE is false.")
 
     return Settings(
-        entra_tenant_id=entra_tenant_id,
-        entra_client_id=entra_client_id,
-        entra_required_scope=os.getenv("ENTRA_REQUIRED_SCOPE", "User"),
-        entra_allowed_tenants=allowed_tenants,
+        clerk_secret_key=clerk_secret_key,
+        clerk_jwt_key=os.getenv("CLERK_JWT_KEY"),
+        clerk_authorized_parties=clerk_authorized_parties,
+        clerk_audience=clerk_audience,
         use_sqlite=use_sqlite,
         sqlite_db_path=sqlite_db_path,
         database_url=database_url,

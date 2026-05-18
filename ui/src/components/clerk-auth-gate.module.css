@@ -90,6 +90,7 @@
   border: 1px solid #0f172a;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.25);
   color: #ffffff;
+  display: inline-flex;
 }
 
 .primaryButton:hover {

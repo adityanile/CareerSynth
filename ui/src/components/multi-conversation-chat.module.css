@@ -637,10 +637,51 @@
   margin: 0 0 6px;
 }
 
+.parseBoxDeleteButton {
+  align-self: flex-end;
+  background: transparent;
+  border: 1px solid #fecaca;
+  border-radius: 999px;
+  color: #b91c1c;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  height: 22px;
+  line-height: 1;
+  margin-left: auto;
+  padding: 0;
+  width: 22px;
+}
+
+.parseModalFooter {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+}
+
+.parseFeedback {
+  max-width: 760px;
+  min-width: min(760px, 100%);
+  width: 100%;
+}
+
+.parseError {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #b91c1c;
+  font-size: 0.75rem;
+  margin: 0;
+  padding: 8px;
+}
+
 .parseModalActions {
   display: flex;
   gap: 8px;
-  justify-content: flex-end;
+  justify-content: center;
+  width: 100%;
 }
 
 @media (max-width: 1024px) {
@@ -669,5 +710,10 @@
 
   .parseDraftSections {
     grid-template-columns: 1fr;
+  }
+
+  .parseFeedback {
+    width: 100%;
+    min-width: 0;
   }
 }

@@ -3,9 +3,9 @@
 import { FormEvent, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import {
-  getEntraAccessToken,
-  subscribeToEntraAccessToken,
-} from "@/lib/entra-token-store";
+  getClerkAccessToken,
+  subscribeToClerkAccessToken,
+} from "@/lib/clerk-token-store";
 import styles from "./profile-resource-manager.module.css";
 
 type ResourceTab = "projects" | "experiences" | "achievements" | "educations" | "resumes";
@@ -193,8 +193,8 @@ export function ProfileResourceManager() {
     () => false,
   );
   const accessToken = useSyncExternalStore(
-    subscribeToEntraAccessToken,
-    getEntraAccessToken,
+    subscribeToClerkAccessToken,
+    getClerkAccessToken,
     () => null,
   );
   const [isOpen, setIsOpen] = useState(false);

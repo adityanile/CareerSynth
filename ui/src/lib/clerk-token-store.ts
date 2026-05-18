@@ -7,7 +7,7 @@ function emit() {
   }
 }
 
-export function setEntraAccessToken(token: string) {
+export function setClerkAccessToken(token: string) {
   if (accessToken === token) {
     return;
   }
@@ -15,7 +15,7 @@ export function setEntraAccessToken(token: string) {
   emit();
 }
 
-export function clearEntraAccessToken() {
+export function clearClerkAccessToken() {
   if (!accessToken) {
     return;
   }
@@ -23,11 +23,11 @@ export function clearEntraAccessToken() {
   emit();
 }
 
-export function getEntraAccessToken(): string | null {
+export function getClerkAccessToken(): string | null {
   return accessToken;
 }
 
-export function subscribeToEntraAccessToken(listener: () => void): () => void {
+export function subscribeToClerkAccessToken(listener: () => void): () => void {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);

@@ -1,7 +1,6 @@
 import { ReactNode } from "react";
-import { EntraAuthProvider } from "@/components/entra-auth-provider";
+import { ClerkAuthGate } from "@/components/clerk-auth-gate";
 
 export default function IntegrationLayout({ children }: { children: ReactNode }) {
-  return <EntraAuthProvider>{children}</EntraAuthProvider>;
+  return <ClerkAuthGate>{children}</ClerkAuthGate>;
 }
-

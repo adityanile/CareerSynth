@@ -5,9 +5,9 @@ import "@copilotkit/react-core/v2/styles.css";
 import { CopilotKit } from "@copilotkit/react-core";
 import { MultiConversationChat } from "@/components/multi-conversation-chat";
 import {
-  getEntraAccessToken,
-  subscribeToEntraAccessToken,
-} from "@/lib/entra-token-store";
+  getClerkAccessToken,
+  subscribeToClerkAccessToken,
+} from "@/lib/clerk-token-store";
 import { resolveDefaultIntegrationId } from "@/lib/integration-config";
 
 interface AgenticChatProps {
@@ -22,8 +22,8 @@ export function AgenticChat({ integrationId }: AgenticChatProps) {
   const agentId = process.env.NEXT_PUBLIC_COPILOT_AGENT_ID ?? resolvedIntegrationId;
   const providerConfig = publicApiKey ? { publicApiKey } : {};
   const accessToken = useSyncExternalStore(
-    subscribeToEntraAccessToken,
-    getEntraAccessToken,
+    subscribeToClerkAccessToken,
+    getClerkAccessToken,
     () => null,
   );
   const headers = useMemo(

@@ -1,4 +1,3 @@
-import os
 from functools import wraps
 from typing import Any
 
@@ -10,19 +9,13 @@ from core.settings import get_settings
 
 def _ensure_authenticated_claims(request: Request) -> dict[str, Any]:
     settings = get_settings()
-    try:
-        return authenticate_request(
-            request,
-            client_id=settings.entra_client_id,
-            required_scope=settings.entra_required_scope,
-            allowed_tenants=settings.entra_allowed_tenants or None,
-        )
-    except HTTPException as exc:
-        if os.getenv("PYTEST_CURRENT_TEST") and exc.status_code == 401 and exc.detail == "Missing Authorization header":
-            test_claims = {"oid": request.headers.get("x-test-oid")}
-            request.state.verified_token_claims = test_claims
-            return test_claims
-        raise
+    return authenticate_request(
+        request,
+        secret_key=settings.clerk_secret_key,
+        audience=settings.clerk_audience or None,
+        authorized_parties=settings.clerk_authorized_parties or None,
+        jwt_key=settings.clerk_jwt_key,
+    )
 
 
 def requires_auth(route_handler):

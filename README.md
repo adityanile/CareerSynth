@@ -66,12 +66,14 @@ AZURE_STORAGE_ACCOUNT_NAME=...
 AZURE_STORAGE_ACCOUNT_KEY=...
 AZURE_STORAGE_CONTAINER_NAME=...
 
-# Entra auth for backend
-ENTRA_TENANT_ID=...
-ENTRA_CLIENT_ID=...
-ENTRA_REQUIRED_SCOPE=User
-# Optional: comma-separated tenant allow-list (if unset, all tenants accepted)
-# ENTRA_ALLOWED_TENANTS=<tenant-guid-1>,<tenant-guid-2>
+# Clerk auth for backend
+CLERK_SECRET_KEY=...
+# Optional: comma-separated allow-list for `azp` claim
+# CLERK_AUTHORIZED_PARTIES=http://localhost:3000
+# Optional: comma-separated audience allow-list for `aud` claim
+# CLERK_AUDIENCE=http://localhost:8888
+# Optional: JWT public key for networkless session token verification
+# CLERK_JWT_KEY=-----BEGIN PUBLIC KEY-----...
 
 # Database mode (default uses PostgreSQL)
 USE_SQLITE=false
@@ -87,18 +89,13 @@ All endpoints below require a valid bearer token with cryptographic JWT validati
 User isolation is enforced with the verified `oid` claim from JWT.
 
 Validation behavior:
-- Signature verification uses Microsoft Entra JWKS (resolved by token `tid`, with `common` fallback).
-- Audience must match `ENTRA_CLIENT_ID` or `api://ENTRA_CLIENT_ID`.
-- Issuer must match tenant-aware Entra patterns:
-  - `https://login.microsoftonline.com/{tid}/v2.0` (or trailing slash)
-  - `https://sts.windows.net/{tid}/` for v1 tokens
-- Required permission check uses `ENTRA_REQUIRED_SCOPE` against token `scp` or `roles`.
-- Optional tenant restriction is controlled by `ENTRA_ALLOWED_TENANTS`.
+- Signature and claim validation use Clerk Python SDK request authentication.
+- Optional `azp` allow-list is controlled by `CLERK_AUTHORIZED_PARTIES`.
+- Optional `aud` allow-list is controlled by `CLERK_AUDIENCE`.
+- If `CLERK_JWT_KEY` is provided, session token verification can run without JWKS network calls.
 
 Expected token claims:
-- `tid`: tenant id (used for key discovery and issuer checks)
 - `oid`: object id (used for per-user data isolation)
-- `scp` or `roles`: permission required by `ENTRA_REQUIRED_SCOPE`
 - `aud`, `iss`, `exp`: standard JWT claims used in validation
 
 Swagger/OpenAPI:

@@ -9,9 +9,9 @@ import {
   useThreads,
 } from "@copilotkit/react-core/v2";
 import {
-  getEntraAccessToken,
-  subscribeToEntraAccessToken,
-} from "@/lib/entra-token-store";
+  getClerkAccessToken,
+  subscribeToClerkAccessToken,
+} from "@/lib/clerk-token-store";
 import { OPEN_RESUME_PARSE_MODAL_EVENT } from "@/lib/ui-events";
 import styles from "./multi-conversation-chat.module.css";
 
@@ -577,8 +577,8 @@ function collectMissingParsedDraftFields(draft: ParsedResumeDraft): string[] {
 function ResumeStatePanel({ agentId }: { agentId: string }) {
   const { agent } = useAgent({ agentId });
   const accessToken = useSyncExternalStore(
-    subscribeToEntraAccessToken,
-    getEntraAccessToken,
+    subscribeToClerkAccessToken,
+    getClerkAccessToken,
     () => null,
   );
   const state = (agent.state ?? {}) as ResumeState;
@@ -1761,9 +1761,6 @@ function ResumeStatePanel({ agentId }: { agentId: string }) {
                 {isParsingResume ? "Parsing..." : "Upload and Parse"}
               </button>
             </div>
-            {parseError && <p className={styles.error}>{parseError}</p>}
-            {parseSuccess && <p className={styles.parseSuccess}>{parseSuccess}</p>}
-
             <div className={styles.parseDraftSections}>
               <section className={styles.parseDraftSection}>
                 <h5>Projects ({parsedResumeDraft.projects.length})</h5>
@@ -1773,6 +1770,19 @@ function ResumeStatePanel({ agentId }: { agentId: string }) {
                   <ul className={styles.payloadList}>
                     {parsedResumeDraft.projects.map((item, index) => (
                       <li key={`parsed-project-${index}`} className={styles.payloadItem}>
+                        <button
+                          type="button"
+                          className={styles.parseBoxDeleteButton}
+                          aria-label="Delete project box"
+                          onClick={() =>
+                            setParsedResumeDraft((current) => ({
+                              ...current,
+                              projects: current.projects.filter((_, itemIndex) => itemIndex !== index),
+                            }))
+                          }
+                        >
+                          x
+                        </button>
                         <label className={styles.inlineLabel}>
                           Project Name
                           <input
@@ -1835,6 +1845,21 @@ function ResumeStatePanel({ agentId }: { agentId: string }) {
                   <ul className={styles.payloadList}>
                     {parsedResumeDraft.experiences.map((item, index) => (
                       <li key={`parsed-exp-${index}`} className={styles.payloadItem}>
+                        <button
+                          type="button"
+                          className={styles.parseBoxDeleteButton}
+                          aria-label="Delete experience box"
+                          onClick={() =>
+                            setParsedResumeDraft((current) => ({
+                              ...current,
+                              experiences: current.experiences.filter(
+                                (_, itemIndex) => itemIndex !== index,
+                              ),
+                            }))
+                          }
+                        >
+                          x
+                        </button>
                         <label className={styles.inlineLabel}>
                           Company
                           <input
@@ -1951,6 +1976,21 @@ function ResumeStatePanel({ agentId }: { agentId: string }) {
                   <ul className={styles.payloadList}>
                     {parsedResumeDraft.achievements.map((item, index) => (
                       <li key={`parsed-ach-${index}`} className={styles.payloadItem}>
+                        <button
+                          type="button"
+                          className={styles.parseBoxDeleteButton}
+                          aria-label="Delete achievement box"
+                          onClick={() =>
+                            setParsedResumeDraft((current) => ({
+                              ...current,
+                              achievements: current.achievements.filter(
+                                (_, itemIndex) => itemIndex !== index,
+                              ),
+                            }))
+                          }
+                        >
+                          x
+                        </button>
                         <label className={styles.inlineLabel}>
                           Name
                           <input
@@ -2020,6 +2060,21 @@ function ResumeStatePanel({ agentId }: { agentId: string }) {
                   <ul className={styles.payloadList}>
                     {parsedResumeDraft.educations.map((item, index) => (
                       <li key={`parsed-edu-${index}`} className={styles.payloadItem}>
+                        <button
+                          type="button"
+                          className={styles.parseBoxDeleteButton}
+                          aria-label="Delete education box"
+                          onClick={() =>
+                            setParsedResumeDraft((current) => ({
+                              ...current,
+                              educations: current.educations.filter(
+                                (_, itemIndex) => itemIndex !== index,
+                              ),
+                            }))
+                          }
+                        >
+                          x
+                        </button>
                         <label className={styles.inlineLabel}>
                           Degree Name
                           <input
@@ -2118,31 +2173,37 @@ function ResumeStatePanel({ agentId }: { agentId: string }) {
                 )}
               </section>
             </div>
-            <div className={styles.parseModalActions}>
-              <button
-                type="button"
-                className={styles.inlineActionPrimary}
-                onClick={() => void addParsedResumeToSystem()}
-                disabled={isParsingResume || isSavingParsedToSystem}
-              >
-                {isSavingParsedToSystem ? "Saving..." : "Add to System"}
-              </button>
-              <button
-                type="button"
-                className={styles.inlineActionPrimary}
-                onClick={applyParsedResumeToState}
-                disabled={isParsingResume || isSavingParsedToSystem}
-              >
-                Apply to Shared State
-              </button>
-              <button
-                type="button"
-                className={styles.inlineActionSecondary}
-                onClick={closeParseModal}
-                disabled={isParsingResume || isSavingParsedToSystem}
-              >
-                Cancel
-              </button>
+            <div className={styles.parseModalFooter}>
+              <div className={styles.parseFeedback}>
+                {parseError && <p className={styles.parseError}>{parseError}</p>}
+                {parseSuccess && <p className={styles.parseSuccess}>{parseSuccess}</p>}
+              </div>
+              <div className={styles.parseModalActions}>
+                <button
+                  type="button"
+                  className={styles.inlineActionPrimary}
+                  onClick={() => void addParsedResumeToSystem()}
+                  disabled={isParsingResume || isSavingParsedToSystem}
+                >
+                  {isSavingParsedToSystem ? "Saving..." : "Add to System"}
+                </button>
+                <button
+                  type="button"
+                  className={styles.inlineActionPrimary}
+                  onClick={applyParsedResumeToState}
+                  disabled={isParsingResume || isSavingParsedToSystem}
+                >
+                  Apply to Shared State
+                </button>
+                <button
+                  type="button"
+                  className={styles.inlineActionSecondary}
+                  onClick={closeParseModal}
+                  disabled={isParsingResume || isSavingParsedToSystem}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -1,13 +1,13 @@
 import { AgenticChat } from "@/components/agentic-chat";
-import { EntraAuthGate } from "@/components/entra-auth-gate";
-import { EntraAuthProvider } from "@/components/entra-auth-provider";
+import { ClerkAuthGate } from "@/components/clerk-auth-gate";
+import { auth } from "@clerk/nextjs/server";
 
-export default function Home() {
+export default async function Home() {
+  await auth();
+
   return (
-    <EntraAuthProvider>
-      <EntraAuthGate>
+    <ClerkAuthGate>
         <AgenticChat />
-      </EntraAuthGate>
-    </EntraAuthProvider>
+    </ClerkAuthGate>
   );
 }

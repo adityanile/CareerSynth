@@ -110,42 +110,10 @@ def _install_stub_modules(monkeypatch: pytest.MonkeyPatch) -> None:
     agent_framework_ag_ui.add_agent_framework_fastapi_endpoint = add_agent_framework_fastapi_endpoint
     agent_framework_ag_ui.AgentFrameworkAgent = DummyAgentFrameworkAgent
 
-    fastapi_microsoft_identity = types.ModuleType("fastapi_microsoft_identity")
-
-    class AuthError(Exception):
-        def __init__(self, error_msg: str):
-            super().__init__(error_msg)
-            self.error_msg = error_msg
-
-    class TokenAuthService:
-        @staticmethod
-        def get_token_claims(request):
-            oid = request.headers.get("x-test-oid")
-            return {"oid": oid} if oid else {}
-
-    def initialize(*args, **kwargs):
-        return None
-
-    def requires_auth(fn):
-        return fn
-
-    def validate_scope(required_scope, request):
-        if request.headers.get("x-force-scope-error") == "1":
-            raise AuthError("Missing required scope")
-        return None
-
-    fastapi_microsoft_identity.AuthError = AuthError
-    fastapi_microsoft_identity.initialize = initialize
-    fastapi_microsoft_identity.requires_auth = requires_auth
-    fastapi_microsoft_identity.validate_scope = validate_scope
-    fastapi_microsoft_identity.auth_service = TokenAuthService
-    fastapi_microsoft_identity.authservice = TokenAuthService
-
     monkeypatch.setitem(sys.modules, "agent_framework", agent_framework)
     monkeypatch.setitem(sys.modules, "agent_framework.openai", agent_framework_openai)
     monkeypatch.setitem(sys.modules, "agent_framework.ag_ui", agent_framework_ag_ui_submodule)
     monkeypatch.setitem(sys.modules, "agent_framework_ag_ui", agent_framework_ag_ui)
-    monkeypatch.setitem(sys.modules, "fastapi_microsoft_identity", fastapi_microsoft_identity)
 
 
 @pytest.fixture
@@ -156,8 +124,7 @@ def app_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     if str(backend_root) not in sys.path:
         sys.path.insert(0, str(backend_root))
 
-    monkeypatch.setenv("ENTRA_TENANT_ID", "tenant")
-    monkeypatch.setenv("ENTRA_CLIENT_ID", "client")
+    monkeypatch.setenv("CLERK_SECRET_KEY", "sk_test_dummy")
     monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "dummy")
     monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.invalid")
     monkeypatch.setenv("AZURE_OPENAI_API_KEY", "dummy-key")

@@ -17,7 +17,7 @@ const handleIntegrationRequest = async (
     authorizationHeader?.startsWith("Bearer ")
       ? authorizationHeader.slice("Bearer ".length).trim()
       : undefined;
-  const authRequired = process.env.ENTRA_AUTH_REQUIRED === "true";
+  const authRequired = process.env.CLERK_AUTH_REQUIRED === "true";
 
   if (authRequired && !accessToken) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
