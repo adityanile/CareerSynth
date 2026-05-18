@@ -11,8 +11,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tini \
     build-essential \
     libpq-dev \
+    texlive \
     texlive-latex-recommended \
-    texlive-latex-base \
     texlive-fonts-recommended \
     texlive-latex-extra \
     texlive-fonts-extra \

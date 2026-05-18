@@ -26,8 +26,8 @@ export function AgenticChat({ integrationId }: AgenticChatProps) {
     getClerkAccessToken,
     () => null,
   );
-  const headers = useMemo(
-    () => (accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+  const headers = useMemo<Record<string, string> | undefined>(
+    () => (accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined),
     [accessToken],
   );
 

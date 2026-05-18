@@ -26,7 +26,14 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body>
-        <ClerkProvider>{children}</ClerkProvider>
+        <ClerkProvider
+          signInForceRedirectUrl="/workspace"
+          signInFallbackRedirectUrl="/workspace"
+          signUpForceRedirectUrl="/workspace"
+          signUpFallbackRedirectUrl="/workspace"
+        >
+          {children}
+        </ClerkProvider>
       </body>
     </html>
   );

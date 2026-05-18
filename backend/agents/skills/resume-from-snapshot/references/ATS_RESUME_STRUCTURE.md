@@ -20,7 +20,6 @@
 \usepackage{multicol}
 \usepackage{fontenc}
 \usepackage[T1]{fontenc}
-\usepackage{lmodern}
 \input{glyphtounicode}
 
 % ---- PAGE SETUP ----

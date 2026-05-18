@@ -8,7 +8,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { Show, SignInButton, UserButton, useAuth, useUser } from "@clerk/nextjs";
+import { Show, UserButton, useAuth, useClerk, useUser } from "@clerk/nextjs";
 import { ProfileResourceManager } from "@/components/profile-resource-manager";
 import { OPEN_RESUME_PARSE_MODAL_EVENT } from "@/lib/ui-events";
 import {
@@ -40,6 +40,7 @@ function getTokenExpiryMs(token: string): number | null {
 
 export function ClerkAuthGate({ children }: { children: ReactNode }) {
   const { isLoaded, isSignedIn, getToken } = useAuth();
+  const { redirectToSignIn } = useClerk();
   const { user } = useUser();
   const hasMounted = useSyncExternalStore(
     () => () => undefined,
@@ -147,30 +148,25 @@ export function ClerkAuthGate({ children }: { children: ReactNode }) {
     };
   }, [clearRefreshTimer]);
 
+  useEffect(() => {
+    if (!isLoaded || isSignedIn) {
+      return;
+    }
+
+    if (typeof redirectToSignIn === "function") {
+      void redirectToSignIn();
+      return;
+    }
+
+    window.location.assign("/sign-in");
+  }, [isLoaded, isSignedIn, redirectToSignIn]);
+
   if (!hasMounted || !isLoaded) {
     return <main className={styles.loadingState}>Loading authentication...</main>;
   }
 
   if (!isSignedIn) {
-    return (
-      <main className={styles.authPage}>
-        <div className={styles.backgroundGlow} aria-hidden="true" />
-        <section className={styles.authCard}>
-          <p className={styles.kicker}>CareerSynth Workspace</p>
-          <h1 className={styles.authTitle}>Sign in to continue</h1>
-          <p className={styles.authDescription}>
-            Sign in with your Clerk account to access conversations and profile-linked
-            context.
-          </p>
-          <SignInButton mode="modal">
-            <button type="button" className={styles.primaryButton}>
-              Sign in
-            </button>
-          </SignInButton>
-          {authError && <p className={styles.errorText}>{authError}</p>}
-        </section>
-      </main>
-    );
+    return <main className={styles.loadingState}>Redirecting to sign in...</main>;
   }
 
   const primaryEmail = user?.primaryEmailAddress?.emailAddress ?? user?.username ?? "User";

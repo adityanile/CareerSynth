@@ -2217,7 +2217,7 @@ interface StateSectionProps<TItem> {
   count: number;
   items: TItem[];
   emptyLabel: string;
-  renderItem: (item: TItem, index: number) => JSX.Element;
+  renderItem: (item: TItem, index: number) => ReactNode;
   footer?: ReactNode;
 }
 
