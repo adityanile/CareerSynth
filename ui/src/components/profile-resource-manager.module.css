@@ -1,17 +1,35 @@
 .launcher {
-  background: #0f172a;
-  border: 1px solid #0f172a;
-  border-radius: 8px;
-  color: #ffffff;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  color: #334155;
   cursor: pointer;
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 6px 10px;
+  font-size: 0.83rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0.75rem 1.1rem;
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    border-color 140ms ease,
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.launcher:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.launcher:focus-visible {
+  outline: 2px solid #0f172a;
+  outline-offset: 2px;
 }
 
 .badge {
-  background: #334155;
+  background: #e2e8f0;
   border-radius: 999px;
+  color: #1e293b;
   margin-left: 8px;
   padding: 2px 7px;
 }

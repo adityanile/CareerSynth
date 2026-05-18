@@ -39,6 +39,25 @@ def _install_stub_modules(monkeypatch: pytest.MonkeyPatch) -> None:
             self.message_id = None
             self.additional_properties = {}
 
+    class Content:
+        @staticmethod
+        def from_text(text=None, **kwargs):
+            return {"type": "text", "text": text, **kwargs}
+
+        @staticmethod
+        def from_data(data=None, media_type=None, additional_properties=None, **kwargs):
+            return {
+                "type": "data",
+                "data": data,
+                "media_type": media_type,
+                "additional_properties": additional_properties or {},
+                **kwargs,
+            }
+
+        @staticmethod
+        def from_uri(uri=None, media_type=None, **kwargs):
+            return {"type": "uri", "uri": uri, "media_type": media_type, **kwargs}
+
     def tool(fn=None, **kwargs):
         if fn is None:
             def _decorator(inner_fn):
@@ -52,6 +71,7 @@ def _install_stub_modules(monkeypatch: pytest.MonkeyPatch) -> None:
     agent_framework.ChatContext = ChatContext
     agent_framework.ChatMiddleware = ChatMiddleware
     agent_framework.Message = Message
+    agent_framework.Content = Content
     agent_framework.tool = tool
 
     agent_framework_openai = types.ModuleType("agent_framework.openai")

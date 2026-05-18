@@ -149,3 +149,46 @@ class ResumePatch(BaseModel):
     resumeName: Optional[str] = None
     resumeDescription: Optional[str] = None
     resume: Optional[str] = None
+
+
+class ResumeParseTextRequest(BaseModel):
+    text: str
+
+
+class ParsedProject(BaseModel):
+    projectName: str
+    description: str
+    techStack: list[str] = Field(default_factory=list)
+
+
+class ParsedExperience(BaseModel):
+    companyName: str
+    position: str
+    description: str
+    startDate: str
+    endDate: Optional[str] = None
+    pursuing: bool = False
+    location: str
+
+
+class ParsedAchievement(BaseModel):
+    name: str
+    organisation: str
+    date: str
+    link: str
+
+
+class ParsedEducation(BaseModel):
+    degreeName: str
+    location: str
+    startYear: str
+    endYear: Optional[str] = None
+    pursuing: bool = False
+    cgpaOrPercentage: str
+
+
+class ParsedResumeOutput(BaseModel):
+    projects: list[ParsedProject] = Field(default_factory=list)
+    experiences: list[ParsedExperience] = Field(default_factory=list)
+    achievements: list[ParsedAchievement] = Field(default_factory=list)
+    educations: list[ParsedEducation] = Field(default_factory=list)

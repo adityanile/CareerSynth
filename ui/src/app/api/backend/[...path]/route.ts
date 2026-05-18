@@ -38,7 +38,12 @@ async function handleBackendProxy(req: NextRequest, context: BackendRouteContext
   const backendUrl = buildTargetUrl(resolveBackendBaseUrl(), path, req.url);
   const contentType = req.headers.get("content-type");
   const shouldIncludeBody = req.method === "POST" || req.method === "PATCH" || req.method === "PUT";
-  const rawBody = shouldIncludeBody ? await req.text() : undefined;
+  const isMultipart = (contentType ?? "").toLowerCase().includes("multipart/form-data");
+  const requestBody = shouldIncludeBody
+    ? isMultipart
+      ? await req.arrayBuffer()
+      : await req.text()
+    : undefined;
 
   try {
     const upstreamResponse = await fetch(backendUrl, {
@@ -47,7 +52,7 @@ async function handleBackendProxy(req: NextRequest, context: BackendRouteContext
         ...(authorizationHeader ? { Authorization: authorizationHeader } : {}),
         ...(contentType ? { "Content-Type": contentType } : {}),
       },
-      body: shouldIncludeBody ? rawBody : undefined,
+      body: shouldIncludeBody ? requestBody : undefined,
       cache: "no-store",
     });
 

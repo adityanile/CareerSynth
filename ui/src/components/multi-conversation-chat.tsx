@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, ReactNode, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useState, useSyncExternalStore } from "react";
 import {
   CopilotChat,
   Thread,
@@ -8,6 +8,11 @@ import {
   useRenderTool,
   useThreads,
 } from "@copilotkit/react-core/v2";
+import {
+  getEntraAccessToken,
+  subscribeToEntraAccessToken,
+} from "@/lib/entra-token-store";
+import { OPEN_RESUME_PARSE_MODAL_EVENT } from "@/lib/ui-events";
 import styles from "./multi-conversation-chat.module.css";
 
 const THREAD_PAGE_SIZE = 25;
@@ -30,6 +35,7 @@ interface ExperienceStateItem {
   companyName?: string;
   startDate?: string;
   endDate?: string | null;
+  pursuing?: boolean;
   position?: string;
   description?: string;
   location?: string;
@@ -56,6 +62,7 @@ interface EducationStateItem {
   startyear?: string;
   endYear?: string | null;
   endyear?: string | null;
+  pursuing?: boolean;
   cgpaOrPercentage?: string;
   "cgpa/percentage"?: string;
   createdAt?: string;
@@ -81,6 +88,13 @@ interface ResumeState {
   summary?: string;
   skills?: string[];
   profile?: ProfileStateItem;
+}
+
+interface ParsedResumeDraft {
+  projects: ProjectStateItem[];
+  experiences: ExperienceStateItem[];
+  achievements: AchievementStateItem[];
+  educations: EducationStateItem[];
 }
 
 interface ProjectFormState {
@@ -408,8 +422,165 @@ function normalizeProfile(value: unknown): Required<ProfileStateItem> {
   };
 }
 
+function emptyParsedResumeDraft(): ParsedResumeDraft {
+  return {
+    projects: [],
+    experiences: [],
+    achievements: [],
+    educations: [],
+  };
+}
+
+async function parseBackendError(response: Response): Promise<string> {
+  const fallback = `Request failed with status ${response.status}.`;
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    return fallback;
+  }
+  try {
+    const payload = (await response.json()) as Record<string, unknown>;
+    if (typeof payload.detail === "string") {
+      return payload.detail;
+    }
+    if (typeof payload.error === "string") {
+      return payload.error;
+    }
+    return fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function normalizeParsedResume(value: unknown): ParsedResumeDraft {
+  const payload = asRecord(value);
+  return {
+    projects: normalizeArray<Record<string, unknown>>(payload.projects).map((item) => ({
+      name: asString(item.name) ?? asString(item.projectName) ?? "",
+      projectName: asString(item.projectName) ?? asString(item.name) ?? "",
+      description: asString(item.description) ?? "",
+      techStack: normalizeArray<string>(item.techStack).map((entry) => asString(entry) ?? "").filter(Boolean),
+    })),
+    experiences: normalizeArray<Record<string, unknown>>(payload.experiences).map((item) => ({
+      companyName: asString(item.companyName) ?? "",
+      position: asString(item.position) ?? "",
+      description: asString(item.description) ?? "",
+      startDate: asString(item.startDate) ?? "",
+      endDate: asString(item.endDate) ?? null,
+      pursuing: Boolean(item.pursuing),
+      location: asString(item.location) ?? "",
+    })),
+    achievements: normalizeArray<Record<string, unknown>>(payload.achievements).map((item) => ({
+      name: asString(item.name) ?? "",
+      organisation: asString(item.organisation) ?? "",
+      date: asString(item.date) ?? "",
+      link: asString(item.link) ?? "",
+    })),
+    educations: normalizeArray<Record<string, unknown>>(payload.educations).map((item) => ({
+      degreeName: asString(item.degreeName) ?? asString(item.degreename) ?? "",
+      location: asString(item.location) ?? "",
+      startYear: asString(item.startYear) ?? asString(item.startyear) ?? "",
+      endYear: asString(item.endYear) ?? asString(item.endyear) ?? null,
+      pursuing: Boolean(item.pursuing),
+      cgpaOrPercentage:
+        asString(item.cgpaOrPercentage) ?? asString(item["cgpa/percentage"]) ?? "",
+    })),
+  };
+}
+
+function collectMissingParsedDraftFields(draft: ParsedResumeDraft): string[] {
+  const issues: string[] = [];
+
+  draft.projects.forEach((item, index) => {
+    const missing: string[] = [];
+    if (!(item.projectName ?? item.name ?? "").trim()) {
+      missing.push("projectName");
+    }
+    if (!(item.description ?? "").trim()) {
+      missing.push("description");
+    }
+    if (missing.length > 0) {
+      issues.push(`projects[${index + 1}]: ${missing.join(", ")}`);
+    }
+  });
+
+  draft.experiences.forEach((item, index) => {
+    const missing: string[] = [];
+    const pursuing = Boolean(item.pursuing);
+    if (!(item.companyName ?? "").trim()) {
+      missing.push("companyName");
+    }
+    if (!(item.position ?? "").trim()) {
+      missing.push("position");
+    }
+    if (!(item.description ?? "").trim()) {
+      missing.push("description");
+    }
+    if (!(item.startDate ?? "").trim()) {
+      missing.push("startDate");
+    }
+    if (!pursuing && !(item.endDate ?? "").trim()) {
+      missing.push("endDate (or set pursuing=true)");
+    }
+    if (!(item.location ?? "").trim()) {
+      missing.push("location");
+    }
+    if (missing.length > 0) {
+      issues.push(`experiences[${index + 1}]: ${missing.join(", ")}`);
+    }
+  });
+
+  draft.achievements.forEach((item, index) => {
+    const missing: string[] = [];
+    if (!(item.name ?? "").trim()) {
+      missing.push("name");
+    }
+    if (!(item.organisation ?? "").trim()) {
+      missing.push("organisation");
+    }
+    if (!(item.date ?? "").trim()) {
+      missing.push("date");
+    }
+    if (!(item.link ?? "").trim()) {
+      missing.push("link");
+    }
+    if (missing.length > 0) {
+      issues.push(`achievements[${index + 1}]: ${missing.join(", ")}`);
+    }
+  });
+
+  draft.educations.forEach((item, index) => {
+    const missing: string[] = [];
+    const pursuing = Boolean(item.pursuing);
+    if (!(item.degreeName ?? item.degreename ?? "").trim()) {
+      missing.push("degreeName");
+    }
+    if (!(item.location ?? "").trim()) {
+      missing.push("location");
+    }
+    if (!(item.startYear ?? item.startyear ?? "").trim()) {
+      missing.push("startYear");
+    }
+    if (!pursuing && !(item.endYear ?? item.endyear ?? "").trim()) {
+      missing.push("endYear (or set pursuing=true)");
+    }
+    if (!(item.cgpaOrPercentage ?? item["cgpa/percentage"] ?? "").trim()) {
+      missing.push("cgpaOrPercentage");
+    }
+    if (missing.length > 0) {
+      issues.push(`educations[${index + 1}]: ${missing.join(", ")}`);
+    }
+  });
+
+  return issues;
+}
+
 function ResumeStatePanel({ agentId }: { agentId: string }) {
   const { agent } = useAgent({ agentId });
+  const accessToken = useSyncExternalStore(
+    subscribeToEntraAccessToken,
+    getEntraAccessToken,
+    () => null,
+  );
   const state = (agent.state ?? {}) as ResumeState;
   const projects = normalizeArray<ProjectStateItem>(state.projects);
   const experiences = normalizeArray<ExperienceStateItem>(state.experiences);
@@ -477,12 +648,135 @@ function ResumeStatePanel({ agentId }: { agentId: string }) {
     linkedinUrl: "",
     additionalUrls: "",
   });
+  const [isParseModalOpen, setIsParseModalOpen] = useState(false);
+  const [isParsingResume, setIsParsingResume] = useState(false);
+  const [isSavingParsedToSystem, setIsSavingParsedToSystem] = useState(false);
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [parseSuccess, setParseSuccess] = useState<string | null>(null);
+  const [selectedResumeFile, setSelectedResumeFile] = useState<File | null>(null);
+  const [parsedResumeDraft, setParsedResumeDraft] = useState<ParsedResumeDraft>(
+    emptyParsedResumeDraft(),
+  );
 
   const applyStatePatch = (patch: Partial<ResumeState>) => {
     agent.setState({
       ...((agent.state ?? {}) as Record<string, unknown>),
       ...patch,
     });
+  };
+
+  useEffect(() => {
+    const handler = () => {
+      setIsParseModalOpen(true);
+      setParseError(null);
+      setParseSuccess(null);
+      setSelectedResumeFile(null);
+      setParsedResumeDraft(emptyParsedResumeDraft());
+    };
+    window.addEventListener(OPEN_RESUME_PARSE_MODAL_EVENT, handler);
+    return () => {
+      window.removeEventListener(OPEN_RESUME_PARSE_MODAL_EVENT, handler);
+    };
+  }, []);
+
+  const closeParseModal = () => {
+    if (isParsingResume) {
+      return;
+    }
+    setIsParseModalOpen(false);
+    setParseError(null);
+    setParseSuccess(null);
+    setSelectedResumeFile(null);
+    setParsedResumeDraft(emptyParsedResumeDraft());
+  };
+
+  const parseUploadedResume = async () => {
+    if (!accessToken) {
+      setParseError("Sign in again to parse resumes.");
+      return;
+    }
+    if (!selectedResumeFile) {
+      setParseError("Select a PDF or DOCX file first.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", selectedResumeFile);
+    setIsParsingResume(true);
+    setParseError(null);
+    setParseSuccess(null);
+    try {
+      const response = await fetch("/api/backend/resumes/parse", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: formData,
+      });
+      if (!response.ok) {
+        throw new Error(await parseBackendError(response));
+      }
+      const payload = (await response.json()) as unknown;
+      setParsedResumeDraft(normalizeParsedResume(payload));
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to parse uploaded resume.";
+      setParseError(message);
+    } finally {
+      setIsParsingResume(false);
+    }
+  };
+
+  const applyParsedResumeToState = () => {
+    applyStatePatch({
+      projects: parsedResumeDraft.projects,
+      experiences: parsedResumeDraft.experiences,
+      achievements: parsedResumeDraft.achievements,
+      educations: parsedResumeDraft.educations,
+    });
+    closeParseModal();
+  };
+
+  const addParsedResumeToSystem = async () => {
+    if (!accessToken) {
+      setParseError("Sign in again to save parsed data.");
+      return;
+    }
+    const validationIssues = collectMissingParsedDraftFields(parsedResumeDraft);
+    if (validationIssues.length > 0) {
+      setParseSuccess(null);
+      setParseError(
+        `Please add missing fields before saving: ${validationIssues.join("; ")}`,
+      );
+      return;
+    }
+    setIsSavingParsedToSystem(true);
+    setParseError(null);
+    setParseSuccess(null);
+    try {
+      const response = await fetch("/api/backend/resumes/parse/save", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(parsedResumeDraft),
+      });
+      if (!response.ok) {
+        throw new Error(await parseBackendError(response));
+      }
+      const result = (await response.json()) as Record<string, unknown>;
+      const saved = asRecord(result.saved);
+      setParseSuccess(
+        `Saved to system: ${saved.projects ?? 0} projects, ${saved.experiences ?? 0} experiences, ${saved.achievements ?? 0} achievements, ${saved.educations ?? 0} educations.`,
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to save parsed data to system.";
+      setParseError(message);
+    } finally {
+      setIsSavingParsedToSystem(false);
+    }
   };
 
   const resetProjectForm = () => {
@@ -712,7 +1006,9 @@ function ResumeStatePanel({ agentId }: { agentId: string }) {
     <aside className={styles.resumeStatePanel}>
       <div className={styles.resumeStateHeader}>
         <h3>Shared Resume State</h3>
-        {!hasAnyState && <span className={styles.stateHint}>No snapshot loaded yet.</span>}
+        <div className={styles.resumeStateHeaderActions}>
+          {!hasAnyState && <span className={styles.stateHint}>No snapshot loaded yet.</span>}
+        </div>
       </div>
 
       <div className={styles.stateGrid}>
@@ -1427,6 +1723,430 @@ function ResumeStatePanel({ agentId }: { agentId: string }) {
           }
         />
       </div>
+      {isParseModalOpen && (
+        <div className={styles.parseModalBackdrop} role="dialog" aria-modal="true">
+          <div className={styles.parseModal}>
+            <div className={styles.parseModalHeader}>
+              <h4 className={styles.parseModalTitle}>Parse Resume</h4>
+              <button
+                type="button"
+                className={styles.parseModalClose}
+                onClick={closeParseModal}
+                disabled={isParsingResume}
+              >
+                Close
+              </button>
+            </div>
+            <p className={styles.parseModalHint}>
+              Upload a PDF or DOCX file to extract structured projects, experiences, achievements,
+              and educations.
+            </p>
+            <label className={styles.inlineLabel}>
+              Resume File
+              <input
+                type="file"
+                accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                className={styles.inlineInput}
+                onChange={(event) => setSelectedResumeFile(event.target.files?.[0] ?? null)}
+                disabled={isParsingResume}
+              />
+            </label>
+            <div className={styles.inlineActions}>
+              <button
+                type="button"
+                className={styles.inlineActionPrimary}
+                onClick={() => void parseUploadedResume()}
+                disabled={isParsingResume}
+              >
+                {isParsingResume ? "Parsing..." : "Upload and Parse"}
+              </button>
+            </div>
+            {parseError && <p className={styles.error}>{parseError}</p>}
+            {parseSuccess && <p className={styles.parseSuccess}>{parseSuccess}</p>}
+
+            <div className={styles.parseDraftSections}>
+              <section className={styles.parseDraftSection}>
+                <h5>Projects ({parsedResumeDraft.projects.length})</h5>
+                {parsedResumeDraft.projects.length === 0 ? (
+                  <p className={styles.stateEmpty}>No parsed projects.</p>
+                ) : (
+                  <ul className={styles.payloadList}>
+                    {parsedResumeDraft.projects.map((item, index) => (
+                      <li key={`parsed-project-${index}`} className={styles.payloadItem}>
+                        <label className={styles.inlineLabel}>
+                          Project Name
+                          <input
+                            className={styles.inlineInput}
+                            value={item.name ?? item.projectName ?? ""}
+                            onChange={(event) =>
+                              setParsedResumeDraft((current) => {
+                                const next = [...current.projects];
+                                next[index] = {
+                                  ...next[index],
+                                  name: event.target.value,
+                                  projectName: event.target.value,
+                                };
+                                return { ...current, projects: next };
+                              })
+                            }
+                          />
+                        </label>
+                        <label className={styles.inlineLabel}>
+                          Description
+                          <textarea
+                            className={styles.inlineTextarea}
+                            value={item.description ?? ""}
+                            onChange={(event) =>
+                              setParsedResumeDraft((current) => {
+                                const next = [...current.projects];
+                                next[index] = { ...next[index], description: event.target.value };
+                                return { ...current, projects: next };
+                              })
+                            }
+                          />
+                        </label>
+                        <label className={styles.inlineLabel}>
+                          Tech Stack (comma separated)
+                          <input
+                            className={styles.inlineInput}
+                            value={normalizeArray<string>(item.techStack).join(", ")}
+                            onChange={(event) =>
+                              setParsedResumeDraft((current) => {
+                                const next = [...current.projects];
+                                next[index] = {
+                                  ...next[index],
+                                  techStack: splitCsv(event.target.value),
+                                };
+                                return { ...current, projects: next };
+                              })
+                            }
+                          />
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+              <section className={styles.parseDraftSection}>
+                <h5>Experiences ({parsedResumeDraft.experiences.length})</h5>
+                {parsedResumeDraft.experiences.length === 0 ? (
+                  <p className={styles.stateEmpty}>No parsed experiences.</p>
+                ) : (
+                  <ul className={styles.payloadList}>
+                    {parsedResumeDraft.experiences.map((item, index) => (
+                      <li key={`parsed-exp-${index}`} className={styles.payloadItem}>
+                        <label className={styles.inlineLabel}>
+                          Company
+                          <input
+                            className={styles.inlineInput}
+                            value={item.companyName ?? ""}
+                            onChange={(event) =>
+                              setParsedResumeDraft((current) => {
+                                const next = [...current.experiences];
+                                next[index] = { ...next[index], companyName: event.target.value };
+                                return { ...current, experiences: next };
+                              })
+                            }
+                          />
+                        </label>
+                        <label className={styles.inlineLabel}>
+                          Position
+                          <input
+                            className={styles.inlineInput}
+                            value={item.position ?? ""}
+                            onChange={(event) =>
+                              setParsedResumeDraft((current) => {
+                                const next = [...current.experiences];
+                                next[index] = { ...next[index], position: event.target.value };
+                                return { ...current, experiences: next };
+                              })
+                            }
+                          />
+                        </label>
+                        <label className={styles.inlineLabel}>
+                          Description
+                          <textarea
+                            className={styles.inlineTextarea}
+                            value={item.description ?? ""}
+                            onChange={(event) =>
+                              setParsedResumeDraft((current) => {
+                                const next = [...current.experiences];
+                                next[index] = { ...next[index], description: event.target.value };
+                                return { ...current, experiences: next };
+                              })
+                            }
+                          />
+                        </label>
+                        <label className={styles.inlineLabel}>
+                          Start Date
+                          <input
+                            className={styles.inlineInput}
+                            value={item.startDate ?? ""}
+                            onChange={(event) =>
+                              setParsedResumeDraft((current) => {
+                                const next = [...current.experiences];
+                                next[index] = { ...next[index], startDate: event.target.value };
+                                return { ...current, experiences: next };
+                              })
+                            }
+                          />
+                        </label>
+                        <label className={styles.inlineLabel}>
+                          End Date
+                          <input
+                            className={styles.inlineInput}
+                            value={item.endDate ?? ""}
+                            disabled={Boolean(item.pursuing)}
+                            onChange={(event) =>
+                              setParsedResumeDraft((current) => {
+                                const next = [...current.experiences];
+                                next[index] = { ...next[index], endDate: event.target.value || null };
+                                return { ...current, experiences: next };
+                              })
+                            }
+                          />
+                        </label>
+                        <label className={styles.checkboxLabel}>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(item.pursuing)}
+                            onChange={(event) =>
+                              setParsedResumeDraft((current) => {
+                                const next = [...current.experiences];
+                                next[index] = {
+                                  ...next[index],
+                                  pursuing: event.target.checked,
+                                  endDate: event.target.checked ? null : next[index].endDate ?? "",
+                                };
+                                return { ...current, experiences: next };
+                              })
+                            }
+                          />
+                          Currently working here (`pursuing`)
+                        </label>
+                        <label className={styles.inlineLabel}>
+                          Location
+                          <input
+                            className={styles.inlineInput}
+                            value={item.location ?? ""}
+                            onChange={(event) =>
+                              setParsedResumeDraft((current) => {
+                                const next = [...current.experiences];
+                                next[index] = { ...next[index], location: event.target.value };
+                                return { ...current, experiences: next };
+                              })
+                            }
+                          />
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+              <section className={styles.parseDraftSection}>
+                <h5>Achievements ({parsedResumeDraft.achievements.length})</h5>
+                {parsedResumeDraft.achievements.length === 0 ? (
+                  <p className={styles.stateEmpty}>No parsed achievements.</p>
+                ) : (
+                  <ul className={styles.payloadList}>
+                    {parsedResumeDraft.achievements.map((item, index) => (
+                      <li key={`parsed-ach-${index}`} className={styles.payloadItem}>
+                        <label className={styles.inlineLabel}>
+                          Name
+                          <input
+                            className={styles.inlineInput}
+                            value={item.name ?? ""}
+                            onChange={(event) =>
+                              setParsedResumeDraft((current) => {
+                                const next = [...current.achievements];
+                                next[index] = { ...next[index], name: event.target.value };
+                                return { ...current, achievements: next };
+                              })
+                            }
+                          />
+                        </label>
+                        <label className={styles.inlineLabel}>
+                          Organisation
+                          <input
+                            className={styles.inlineInput}
+                            value={item.organisation ?? ""}
+                            onChange={(event) =>
+                              setParsedResumeDraft((current) => {
+                                const next = [...current.achievements];
+                                next[index] = { ...next[index], organisation: event.target.value };
+                                return { ...current, achievements: next };
+                              })
+                            }
+                          />
+                        </label>
+                        <label className={styles.inlineLabel}>
+                          Date
+                          <input
+                            className={styles.inlineInput}
+                            value={item.date ?? ""}
+                            onChange={(event) =>
+                              setParsedResumeDraft((current) => {
+                                const next = [...current.achievements];
+                                next[index] = { ...next[index], date: event.target.value };
+                                return { ...current, achievements: next };
+                              })
+                            }
+                          />
+                        </label>
+                        <label className={styles.inlineLabel}>
+                          Link
+                          <input
+                            className={styles.inlineInput}
+                            value={item.link ?? ""}
+                            onChange={(event) =>
+                              setParsedResumeDraft((current) => {
+                                const next = [...current.achievements];
+                                next[index] = { ...next[index], link: event.target.value };
+                                return { ...current, achievements: next };
+                              })
+                            }
+                          />
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+              <section className={styles.parseDraftSection}>
+                <h5>Educations ({parsedResumeDraft.educations.length})</h5>
+                {parsedResumeDraft.educations.length === 0 ? (
+                  <p className={styles.stateEmpty}>No parsed educations.</p>
+                ) : (
+                  <ul className={styles.payloadList}>
+                    {parsedResumeDraft.educations.map((item, index) => (
+                      <li key={`parsed-edu-${index}`} className={styles.payloadItem}>
+                        <label className={styles.inlineLabel}>
+                          Degree Name
+                          <input
+                            className={styles.inlineInput}
+                            value={item.degreeName ?? ""}
+                            onChange={(event) =>
+                              setParsedResumeDraft((current) => {
+                                const next = [...current.educations];
+                                next[index] = { ...next[index], degreeName: event.target.value };
+                                return { ...current, educations: next };
+                              })
+                            }
+                          />
+                        </label>
+                        <label className={styles.inlineLabel}>
+                          Location
+                          <input
+                            className={styles.inlineInput}
+                            value={item.location ?? ""}
+                            onChange={(event) =>
+                              setParsedResumeDraft((current) => {
+                                const next = [...current.educations];
+                                next[index] = { ...next[index], location: event.target.value };
+                                return { ...current, educations: next };
+                              })
+                            }
+                          />
+                        </label>
+                        <label className={styles.inlineLabel}>
+                          Start Year
+                          <input
+                            className={styles.inlineInput}
+                            value={item.startYear ?? ""}
+                            onChange={(event) =>
+                              setParsedResumeDraft((current) => {
+                                const next = [...current.educations];
+                                next[index] = { ...next[index], startYear: event.target.value };
+                                return { ...current, educations: next };
+                              })
+                            }
+                          />
+                        </label>
+                        <label className={styles.inlineLabel}>
+                          End Year
+                          <input
+                            className={styles.inlineInput}
+                            value={item.endYear ?? ""}
+                            disabled={Boolean(item.pursuing)}
+                            onChange={(event) =>
+                              setParsedResumeDraft((current) => {
+                                const next = [...current.educations];
+                                next[index] = { ...next[index], endYear: event.target.value || null };
+                                return { ...current, educations: next };
+                              })
+                            }
+                          />
+                        </label>
+                        <label className={styles.checkboxLabel}>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(item.pursuing)}
+                            onChange={(event) =>
+                              setParsedResumeDraft((current) => {
+                                const next = [...current.educations];
+                                next[index] = {
+                                  ...next[index],
+                                  pursuing: event.target.checked,
+                                  endYear: event.target.checked ? null : next[index].endYear ?? "",
+                                };
+                                return { ...current, educations: next };
+                              })
+                            }
+                          />
+                          Currently pursuing this education
+                        </label>
+                        <label className={styles.inlineLabel}>
+                          CGPA/Percentage
+                          <input
+                            className={styles.inlineInput}
+                            value={item.cgpaOrPercentage ?? ""}
+                            onChange={(event) =>
+                              setParsedResumeDraft((current) => {
+                                const next = [...current.educations];
+                                next[index] = {
+                                  ...next[index],
+                                  cgpaOrPercentage: event.target.value,
+                                };
+                                return { ...current, educations: next };
+                              })
+                            }
+                          />
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </div>
+            <div className={styles.parseModalActions}>
+              <button
+                type="button"
+                className={styles.inlineActionPrimary}
+                onClick={() => void addParsedResumeToSystem()}
+                disabled={isParsingResume || isSavingParsedToSystem}
+              >
+                {isSavingParsedToSystem ? "Saving..." : "Add to System"}
+              </button>
+              <button
+                type="button"
+                className={styles.inlineActionPrimary}
+                onClick={applyParsedResumeToState}
+                disabled={isParsingResume || isSavingParsedToSystem}
+              >
+                Apply to Shared State
+              </button>
+              <button
+                type="button"
+                className={styles.inlineActionSecondary}
+                onClick={closeParseModal}
+                disabled={isParsingResume || isSavingParsedToSystem}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

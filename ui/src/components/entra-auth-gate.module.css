@@ -136,11 +136,24 @@
   position: sticky;
   top: 0;
   z-index: 10;
+  position: relative;
 }
 
 .accountLabel {
   color: #1f2937;
   font-size: 0.92rem;
+}
+
+.sessionTitle {
+  color: #0f172a;
+  font-size: 0.95rem;
+  font-weight: 700;
+  left: 50%;
+  letter-spacing: -0.01em;
+  pointer-events: none;
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
 
 .sessionActions {
@@ -179,5 +192,10 @@
   .sessionBar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .sessionTitle {
+    position: static;
+    transform: none;
   }
 }

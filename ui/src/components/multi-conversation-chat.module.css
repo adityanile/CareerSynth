@@ -186,7 +186,10 @@
 }
 
 .chatHeader {
+  align-items: center;
   border-bottom: 1px solid #dedfe3;
+  display: flex;
+  justify-content: space-between;
   padding: 16px 20px;
 }
 
@@ -194,6 +197,17 @@
   color: #111827;
   font-size: 1rem;
   font-weight: 600;
+}
+
+.topBarParseButton {
+  background: #111827;
+  border: 1px solid #111827;
+  border-radius: 8px;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 8px 12px;
 }
 
 .chatBody {
@@ -238,6 +252,23 @@
   margin-bottom: 10px;
 }
 
+.resumeStateHeaderActions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.parseResumeButton {
+  background: #111827;
+  border: 1px solid #111827;
+  border-radius: 6px;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 4px 8px;
+}
+
 .resumeStateHeader h3 {
   color: #111827;
   font-size: 0.9rem;
@@ -251,7 +282,7 @@
 
 .stateGrid {
   display: grid;
-  gap: 10px;
+  gap: 14px;
   grid-template-columns: 1fr;
 }
 
@@ -260,8 +291,8 @@
   border: 1px solid #dbe3ef;
   border-radius: 10px;
   box-shadow: 0 1px 2px rgba(17, 24, 39, 0.05);
-  min-height: 100px;
-  padding: 10px;
+  min-height: 120px;
+  padding: 14px;
 }
 
 .stateCardHeader {
@@ -303,7 +334,7 @@
 .payloadList {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -312,11 +343,11 @@
 .payloadItem {
   background: #ffffff;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  border-radius: 10px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 6px;
+  gap: 6px;
+  padding: 10px;
 }
 
 .payloadTitle {
@@ -328,8 +359,8 @@
 
 .payloadLine {
   color: #1f2937;
-  font-size: 0.72rem;
-  line-height: 1.35;
+  font-size: 0.74rem;
+  line-height: 1.45;
   margin: 0;
 }
 
@@ -340,6 +371,8 @@
 
 .payloadValue {
   color: #111827;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .payloadTagsWrap {
@@ -389,18 +422,27 @@
   border-top: 1px dashed #d1d5db;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-top: 8px;
-  padding-top: 8px;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
 }
 
 .inlineLabel {
   color: #374151;
   display: flex;
   flex-direction: column;
-  font-size: 0.7rem;
+  font-size: 0.74rem;
   font-weight: 600;
-  gap: 4px;
+  gap: 6px;
+}
+
+.checkboxLabel {
+  align-items: center;
+  color: #374151;
+  display: flex;
+  font-size: 0.74rem;
+  font-weight: 600;
+  gap: 8px;
 }
 
 .inlineInput,
@@ -408,12 +450,15 @@
   border: 1px solid #d1d5db;
   border-radius: 6px;
   color: #111827;
-  font-size: 0.72rem;
-  padding: 6px 8px;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  padding: 8px 10px;
+  width: 100%;
 }
 
 .inlineTextarea {
-  min-height: 58px;
+  field-sizing: content;
+  min-height: 88px;
   resize: vertical;
 }
 
@@ -506,6 +551,98 @@
   line-height: 1.35;
 }
 
+.parseModalBackdrop {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.4);
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  left: 0;
+  padding: 16px;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 80;
+}
+
+.parseModal {
+  background: #ffffff;
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 90vh;
+  max-width: 900px;
+  overflow: auto;
+  padding: 16px;
+  width: min(900px, 100%);
+}
+
+.parseModalHeader {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.parseModalTitle {
+  color: #111827;
+  font-size: 0.92rem;
+  margin: 0;
+}
+
+.parseModalClose {
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  color: #374151;
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 4px 8px;
+}
+
+.parseModalHint {
+  color: #4b5563;
+  font-size: 0.74rem;
+  margin: 0;
+}
+
+.parseSuccess {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 8px;
+  color: #047857;
+  font-size: 0.75rem;
+  margin: 0;
+  padding: 8px;
+}
+
+.parseDraftSections {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.parseDraftSection {
+  background: #f8fafc;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.parseDraftSection h5 {
+  color: #1f2937;
+  font-size: 0.75rem;
+  margin: 0 0 6px;
+}
+
+.parseModalActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 @media (max-width: 1024px) {
   .layout {
     grid-template-columns: 1fr;
@@ -528,5 +665,9 @@
 
   .resumeStatePanel {
     max-height: 280px;
+  }
+
+  .parseDraftSections {
+    grid-template-columns: 1fr;
   }
 }

@@ -15,6 +15,7 @@ import {
 } from "@azure/msal-browser";
 import { useMsal } from "@azure/msal-react";
 import { ProfileResourceManager } from "@/components/profile-resource-manager";
+import { OPEN_RESUME_PARSE_MODAL_EVENT } from "@/lib/ui-events";
 import { entraLoginRequest, entraTokenRequest } from "@/lib/entra-auth";
 import {
   clearEntraAccessToken,
@@ -185,8 +186,18 @@ export function EntraAuthGate({ children }: { children: ReactNode }) {
         <span className={styles.accountLabel}>
           Signed in as <strong>{activeAccount?.username ?? "Entra user"}</strong>
         </span>
+        <span className={styles.sessionTitle}>CareerSynth Assistant</span>
         <div className={styles.sessionActions}>
           <ProfileResourceManager />
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            onClick={() =>
+              window.dispatchEvent(new CustomEvent(OPEN_RESUME_PARSE_MODAL_EVENT))
+            }
+          >
+            Parse Resume
+          </button>
           <button
             type="button"
             className={styles.secondaryButton}

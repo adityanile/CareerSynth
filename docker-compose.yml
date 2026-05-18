@@ -1,0 +1,24 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: careersynth-backend
+    env_file:
+      - ./backend/.env
+    ports:
+      - "8888:8888"
+    restart: unless-stopped
+
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    container_name: careersynth-ui
+    environment:
+      AG_UI_AGENT_URL: http://backend:8888/
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    restart: unless-stopped

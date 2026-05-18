@@ -1,3 +1,7 @@
+import io
+import zipfile
+
+
 def test_projects_crud_and_filters(client, oid_headers):
     create_payload = {
         "name": "Project One",
@@ -337,6 +341,234 @@ def test_resume_delete_returns_502_if_blob_cleanup_fails(client, oid_headers, mo
     # Record should remain when blob cleanup fails.
     get_res = client.get(f"/api/resumes/{resume_id}", headers=oid_headers("user-1"))
     assert get_res.status_code == 200
+
+
+def test_parse_resume_upload_pdf_returns_structured_output(client, oid_headers, monkeypatch):
+    from api.routes import resumes as resumes_route
+
+    async def _fake_parse_resume_from_pdf(file_name: str, file_bytes: bytes):
+        assert file_name == "resume.pdf"
+        assert file_bytes.startswith(b"%PDF")
+        return resumes_route.ParsedResumeOutput(
+            projects=[
+                {
+                    "projectName": "CareerSynth",
+                    "description": "Built resume platform",
+                    "techStack": ["FastAPI", "React"],
+                }
+            ],
+            experiences=[],
+            achievements=[],
+            educations=[],
+        )
+
+    monkeypatch.setattr(resumes_route, "_parse_resume_from_pdf", _fake_parse_resume_from_pdf)
+
+    res = client.post(
+        "/api/resumes/parse",
+        files={"file": ("resume.pdf", b"%PDF-1.7 fake", "application/pdf")},
+        headers=oid_headers("user-1"),
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["projects"][0]["projectName"] == "CareerSynth"
+    assert body["experiences"] == []
+
+
+def test_parse_resume_upload_docx_uses_text_parser(client, oid_headers, monkeypatch):
+    from api.routes import resumes as resumes_route
+
+    called: dict[str, str] = {}
+
+    def _fake_extract_docx_text(file_bytes: bytes) -> str:
+        called["extract_called"] = "1"
+        assert file_bytes
+        return "John Doe\nBackend Engineer"
+
+    async def _fake_parse_resume_from_text(resume_text: str):
+        called["text"] = resume_text
+        return resumes_route.ParsedResumeOutput(
+            projects=[],
+            experiences=[],
+            achievements=[
+                {
+                    "name": "Winner",
+                    "organisation": "HackFest",
+                    "date": "2025",
+                    "link": "https://example.com",
+                }
+            ],
+            educations=[],
+        )
+
+    monkeypatch.setattr(resumes_route, "_extract_docx_text", _fake_extract_docx_text)
+    monkeypatch.setattr(resumes_route, "_parse_resume_from_text", _fake_parse_resume_from_text)
+
+    fake_docx = io.BytesIO()
+    with zipfile.ZipFile(fake_docx, "w") as archive:
+        archive.writestr("word/document.xml", "<w:document></w:document>")
+
+    res = client.post(
+        "/api/resumes/parse",
+        files={
+            "file": (
+                "resume.docx",
+                fake_docx.getvalue(),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+        headers=oid_headers("user-1"),
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert called["extract_called"] == "1"
+    assert called["text"] == "John Doe\nBackend Engineer"
+    assert body["achievements"][0]["organisation"] == "HackFest"
+
+
+def test_parse_resume_text_endpoint_returns_structured_output(client, oid_headers, monkeypatch):
+    from api.routes import resumes as resumes_route
+
+    async def _fake_parse_resume_from_text(resume_text: str):
+        assert "Backend Engineer" in resume_text
+        return resumes_route.ParsedResumeOutput(
+            projects=[],
+            experiences=[
+                {
+                    "companyName": "Acme",
+                    "position": "Backend Engineer",
+                    "description": "Built APIs",
+                    "startDate": "2023",
+                    "endDate": None,
+                    "location": "Bengaluru",
+                }
+            ],
+            achievements=[],
+            educations=[],
+        )
+
+    monkeypatch.setattr(resumes_route, "_parse_resume_from_text", _fake_parse_resume_from_text)
+
+    res = client.post(
+        "/api/resumes/parse",
+        json={"text": "Worked as Backend Engineer at Acme"},
+        headers=oid_headers("user-1"),
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["experiences"][0]["companyName"] == "Acme"
+    assert body["experiences"][0]["endDate"] is None
+
+
+def test_parse_resume_upload_rejects_unsupported_file(client, oid_headers):
+    res = client.post(
+        "/api/resumes/parse",
+        files={"file": ("resume.txt", b"plain text", "text/plain")},
+        headers=oid_headers("user-1"),
+    )
+
+    assert res.status_code == 400
+    assert "Only PDF and DOCX files are supported." in res.json()["detail"]
+
+
+def test_parse_resume_upload_allows_octet_stream_content_type(client, oid_headers, monkeypatch):
+    from api.routes import resumes as resumes_route
+
+    async def _fake_parse_resume_from_pdf(file_name: str, file_bytes: bytes):
+        assert file_name == "resume.pdf"
+        assert file_bytes.startswith(b"%PDF")
+        return resumes_route.ParsedResumeOutput(
+            projects=[],
+            experiences=[],
+            achievements=[],
+            educations=[],
+        )
+
+    monkeypatch.setattr(resumes_route, "_parse_resume_from_pdf", _fake_parse_resume_from_pdf)
+
+    res = client.post(
+        "/api/resumes/parse",
+        files={"file": ("resume.pdf", b"%PDF-1.7 fake", "application/octet-stream")},
+        headers=oid_headers("user-1"),
+    )
+
+    assert res.status_code == 200
+
+
+def test_save_parsed_resume_to_system_persists_records(client, oid_headers):
+    payload = {
+        "projects": [
+            {
+                "projectName": "CareerSynth",
+                "description": "Built resume workflows",
+                "techStack": ["FastAPI", "React"],
+            }
+        ],
+        "experiences": [
+            {
+                "companyName": "Acme",
+                "position": "Backend Engineer",
+                "description": "Built APIs",
+                "startDate": "2023",
+                "endDate": None,
+                "location": "Bengaluru",
+            }
+        ],
+        "achievements": [
+            {
+                "name": "Hackathon Winner",
+                "organisation": "Acme Org",
+                "date": "2025",
+                "link": "https://example.com/cert",
+            }
+        ],
+        "educations": [
+            {
+                "degreeName": "B.Tech CSE",
+                "location": "Bengaluru",
+                "startYear": "2020",
+                "endYear": "2024",
+                "cgpaOrPercentage": "8.7",
+            }
+        ],
+    }
+
+    save_res = client.post(
+        "/api/resumes/parse/save",
+        json=payload,
+        headers=oid_headers("user-1"),
+    )
+    assert save_res.status_code == 200
+    body = save_res.json()
+    assert body["saved"] == {
+        "projects": 1,
+        "experiences": 1,
+        "achievements": 1,
+        "educations": 1,
+    }
+    assert body["skipped"] == {
+        "projects": 0,
+        "experiences": 0,
+        "achievements": 0,
+        "educations": 0,
+    }
+
+    assert client.get("/api/projects", headers=oid_headers("user-1")).json()["items"][0]["name"] == "CareerSynth"
+    assert (
+        client.get("/api/experiences", headers=oid_headers("user-1")).json()["items"][0]["companyName"]
+        == "Acme"
+    )
+    assert (
+        client.get("/api/achievements", headers=oid_headers("user-1")).json()["items"][0]["name"]
+        == "Hackathon Winner"
+    )
+    assert (
+        client.get("/api/educations", headers=oid_headers("user-1")).json()["items"][0]["degreeName"]
+        == "B.Tech CSE"
+    )
 
 
 def test_missing_oid_claim_returns_401(client):

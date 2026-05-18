@@ -1,24 +1,30 @@
-FROM ubuntu:latest
-
-LABEL Maintainer=adityanile<adityanile@gmail.com>
+FROM python:3.12-slim
 
 WORKDIR /app
 
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 \
-    python3-pip \
     ca-certificates \
+    tini \
+    build-essential \
+    libpq-dev \
     texlive-latex-recommended \
-    texlive \
+    texlive-latex-base \
     texlive-fonts-recommended \
     texlive-latex-extra \
     texlive-fonts-extra \
-    texlive-lang-all \
+    texlive-lang-english \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install --no-cache-dir --break-system-packages uv
-
 COPY requirements.txt /app/requirements.txt
-RUN uv pip install --system --break-system-packages --prerelease=allow --no-cache -r /app/requirements.txt
+RUN pip install -r /app/requirements.txt
 
-#COPY . /app
+COPY . /app
+
+EXPOSE 8888
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8888"]
