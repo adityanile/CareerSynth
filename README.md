@@ -1,259 +1,106 @@
-# CareerSynth
+# 🚀 CareerSynth v1.0 Release
 
-CareerSynth is a resume creation system built on the Microsoft Agent Framework + AG-UI.
+We’re excited to officially launch **CareerSynth** — an AI-powered career acceleration platform designed to help users build stronger resumes, generate tailored cover letters, prepare for interviews, and optimize job applications using modern AI workflows.
 
-It includes:
-- A backend Resume Creator agent (`backend/server.py`)
-- A tool that compiles LaTeX resumes to PDF and uploads to Azure Blob (`backend/agents/tools/resume_pdf_tool.py`)
-- A helper CLI compiler/uploader script (`compile_tex.py`)
-- A Next.js chat UI (`ui/`)
+🌐 Website: https://careersynth.app/
 
-## Project Structure
+---
 
-- `backend/server.py`: backend entrypoint for FastAPI + AG-UI endpoint.
-- `backend/app.py`: app composition (routers, auth/OpenAPI wiring, startup).
-- `backend/agents/tools/resume_pdf_tool.py`: `@tool()` implementation `generate_resume_pdf(...)`.
-- `compile_tex.py`: CLI utility to compile a local `.tex` file and upload the resulting PDF.
-- `docker/backend.dockerfile`: Backend image with Python + TeX Live + dependencies.
-- `docker/requirements.txt`: Backend Python dependencies.
-- `ui/`: Frontend app.
+## ✨ What is CareerSynth?
 
-## How The Agent Works
+CareerSynth combines advanced AI models and automation pipelines to simplify and improve the job application process.
 
-1. Interactively collects resume details from the user.
-2. Produces a draft and asks for explicit approval.
-3. Generates final LaTeX only after approval.
-4. Calls `generate_resume_pdf` tool with the LaTeX.
-5. Tool compiles PDF, uploads to Azure Blob with UUID filename, returns blob URL.
+The platform helps users:
 
-## Tool Behavior (`generate_resume_pdf`)
+- Generate ATS-optimized resumes
+- Create personalized cover letters
+- Prepare for interviews with AI assistance
+- Improve job matching efficiency
+- Streamline career workflows using intelligent automation
 
-Input:
-- `latex_code` (string): full LaTeX source.
+The project focuses on delivering a fast, scalable, and user-friendly experience for students, developers, professionals, and job seekers.
 
-Validation:
-- non-empty input
-- max size check
-- requires `\documentclass`, `\begin{document}`, `\end{document}`
-- checks begin/end document balance
-- rejects null-byte input
+---
 
-Execution:
-- compiles using `pdflatex` in a temp directory
-- verifies generated PDF exists and is non-empty
-- uploads to Azure Blob
-- sets blob content headers for browser viewing:
-  - `content_type=application/pdf`
-  - `content_disposition=inline`
-- validates upload with blob property size check
+## 🔥 Key Features
 
-Return format:
-- success: blob URL (string)
-- failure: string with `ERROR[validation]`, `ERROR[compile]`, `ERROR[upload]`, or `ERROR[runtime]`
+### 🧠 AI Resume Generation
+Create professional, ATS-friendly resumes tailored to specific roles and industries.
 
-## Environment Variables
+### ✉️ Smart Cover Letter Creation
+Generate personalized cover letters based on resume data and job descriptions.
 
-Create a `.env` in project root for backend:
+### 🎯 Interview Preparation
+Practice technical and behavioral interview questions with AI-powered assistance.
 
-```env
-# Azure OpenAI (agent model)
-AZURE_OPENAI_DEPLOYMENT=...
-AZURE_OPENAI_ENDPOINT=...
-AZURE_OPENAI_API_KEY=...
+### ⚡ Intelligent Career Workflows
+Automate repetitive job application tasks and improve application efficiency.
 
-# Azure Blob Storage (PDF upload)
-AZURE_STORAGE_ACCOUNT_NAME=...
-AZURE_STORAGE_ACCOUNT_KEY=...
-AZURE_STORAGE_CONTAINER_NAME=...
+### ☁️ Scalable AI Infrastructure
+Built with modern cloud-native and AI orchestration principles for performance and scalability.
 
-# Clerk auth for backend
-CLERK_SECRET_KEY=...
-# Optional: comma-separated allow-list for `azp` claim
-# CLERK_AUTHORIZED_PARTIES=http://localhost:3000
-# Optional: comma-separated audience allow-list for `aud` claim
-# CLERK_AUDIENCE=http://localhost:8888
-# Optional: JWT public key for networkless session token verification
-# CLERK_JWT_KEY=-----BEGIN PUBLIC KEY-----...
+---
 
-# Database mode (default uses PostgreSQL)
-USE_SQLITE=false
-DATABASE_URL=postgresql+psycopg://<user>:<password>@<host>:5432/<db_name>
+## 🛠️ Tech Stack
 
-# Optional (used only when USE_SQLITE=true)
-SQLITE_DB_PATH=careersynth.db
-```
+- Frontend: React / Next.js
+- Backend: Node.js / Python APIs
+- AI Models: GPT-based workflows
+- AI Orchestration: LangChain / Agentic Pipelines
+- Cloud Infrastructure: Modern scalable deployment architecture
 
-## CRUD API (JWT Protected)
+---
 
-All endpoints below require a valid bearer token with cryptographic JWT validation.
-User isolation is enforced with the verified `oid` claim from JWT.
+## 📈 Vision
 
-Validation behavior:
-- Signature and claim validation use Clerk Python SDK request authentication.
-- Optional `azp` allow-list is controlled by `CLERK_AUTHORIZED_PARTIES`.
-- Optional `aud` allow-list is controlled by `CLERK_AUDIENCE`.
-- If `CLERK_JWT_KEY` is provided, session token verification can run without JWKS network calls.
+CareerSynth aims to become a complete AI-powered career ecosystem where users can:
 
-Expected token claims:
-- `oid`: object id (used for per-user data isolation)
-- `aud`, `iss`, `exp`: standard JWT claims used in validation
+- Build professional profiles
+- Optimize job applications
+- Improve interview performance
+- Automate career workflows
+- Increase hiring success rates
 
-Swagger/OpenAPI:
-- `GET /docs` exposes an `Authorize` button with `BearerAuth` (JWT).
-- Use value format: `Bearer <access_token>`.
+---
 
-Base resources:
-- `/api/projects`
-- `/api/experiences`
-- `/api/achievements`
+## 🚀 Getting Started
 
-Shared operations:
-- `POST /api/<resource>` create
-- `GET /api/<resource>` list (user-scoped)
-- `GET /api/<resource>/{id}` get one (user-scoped)
-- `PATCH /api/<resource>/{id}` partial update (user-scoped)
-- `DELETE /api/<resource>/{id}` hard delete (user-scoped)
+Visit the platform here:
 
-Project-specific filters:
-- `GET /api/projects/by-tag/{tag}`
-- `GET /api/projects/by-tech/{tech}`
-- `GET /api/projects?tag=react`
-- `GET /api/projects?tags=react,fastapi` (requires all listed tags)
-- `GET /api/projects?tech=python`
-- `GET /api/projects?techs=python,fastapi` (requires all listed tech values)
-- `GET /api/projects?name=CareerSynth%20Platform`
+👉 https://careersynth.app/
 
-Experience-specific filters:
-- `GET /api/experiences?position=Software%20Engineer`
-- `GET /api/experiences/by-position/{position}`
-- `GET /api/experiences/by-company/{company_name}`
+---
 
-Achievement-specific filters:
-- `GET /api/achievements?organisation=Microsoft`
-- `GET /api/achievements?name=Hackathon%20Winner`
-- `GET /api/achievements/by-organisation/{organisation}`
-- `GET /api/achievements/by-name/{name}`
+## 💡 Future Roadmap
 
-### Request Shapes
+- AI job matching engine
+- Resume scoring & analytics
+- Multi-agent career assistants
+- LinkedIn optimization tools
+- Personalized career insights
+- Enterprise hiring workflows
 
-`POST /api/projects`
-```json
-{
-  "name": "CareerSynth Platform",
-  "techStack": ["FastAPI", "SQLite", "Next.js"],
-  "urls": ["https://example.com"],
-  "description": "Resume platform backend",
-  "tags": ["backend", "api"]
-}
-```
+---
 
-`POST /api/experiences`
-```json
-{
-  "companyName": "Acme Corp",
-  "startDate": "10-01-2024",
-  "endDate": null,
-  "position": "Backend Engineer",
-  "description": "Built scalable services",
-  "location": "Bengaluru"
-}
-```
+## 🙌 Feedback & Contributions
 
-`POST /api/achievements`
-```json
-{
-  "name": "Hackathon Winner",
-  "link": "https://example.com/certificate",
-  "organisation": "Acme",
-  "date": "01-12-2025"
-}
-```
+We’d love feedback from the community.  
+If you have ideas, suggestions, or want to contribute, feel free to open issues or submit pull requests.
 
-Date field behavior:
-- `startDate`, `endDate`, and `date` are stored as user-provided strings.
-- `endDate` can be `null` for ongoing roles.
+⭐ Star the repository if you find the project useful.
 
-## Local Backend Setup
+---
 
-Install system dependencies (Ubuntu example):
+## 📢 Release Notes
 
-```bash
-sudo apt update
-sudo apt install -y \
-  python3 python3-pip \
-  texlive-latex-recommended texlive texlive-fonts-recommended \
-  texlive-latex-extra texlive-fonts-extra texlive-lang-all
-```
+### Initial Public Release — v1.0
+- Core AI resume generation
+- Cover letter workflows
+- Interview preparation system
+- AI-powered career assistance
+- Responsive frontend deployment
+- Initial production-ready infrastructure
 
-Install Python dependencies:
+---
 
-```bash
-pip install -r docker/requirements.txt
-```
-
-Run DB migrations (PostgreSQL mode):
-
-```bash
-cd backend
-alembic upgrade head
-```
-
-Run backend:
-
-```bash
-python backend/server.py
-```
-
-Backend starts on:
-- `http://0.0.0.0:8888/`
-
-## API Smoke Test
-
-After backend is running, execute the CRUD smoke test:
-
-```bash
-TOKEN="<jwt_access_token>" ./smoke_test_api.sh
-```
-
-Optional:
-- `BASE_URL=http://localhost:8888` (default)
-
-Prerequisite:
-- `jq` installed (used for response parsing)
-
-## CLI Compile/Upload (without agent)
-
-```bash
-python compile_tex.py /path/to/resume.tex
-```
-
-This compiles the `.tex`, uploads resulting PDF to Blob, prints URL.
-
-## Frontend (UI)
-
-From `ui/`:
-
-```bash
-npm install
-npm run dev
-```
-
-See UI-specific setup in:
-- [ui/README.md](/home/aditya/Development/Current_Projects/CareerSynth/ui/README.md)
-
-## Docker Backend
-
-Build image from project root:
-
-```bash
-docker build -f docker/backend.dockerfile -t careersynth-backend .
-```
-
-Run container:
-
-```bash
-docker run --rm -p 8888:8888 --env-file .env careersynth-backend
-```
-
-Note:
-- Ensure your Dockerfile copies application code into `/app` before runtime if needed.
+Built with ❤️ to help people accelerate their careers using AI.
