@@ -73,6 +73,7 @@ stages:
         containerRegistry: $(dockerRegistryServiceConnection)
         tags: |
           $(tag)
+          latest
 
     - bash: |
         docker run -v /tmp:/tmp $(containerRegistry)/$(backendRepository):$(tag) pytest --junitxml=/tmp/test-report.xml 
