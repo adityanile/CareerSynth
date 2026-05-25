@@ -54,6 +54,7 @@ stages:
         containerRegistry: $(dockerRegistryServiceConnection)
         tags: |
           $(tag)
+          latest
           
 - stage: Build
   displayName: Build and Test Stage
@@ -95,6 +96,7 @@ stages:
         containerRegistry: $(dockerRegistryServiceConnection)
         tags: |
           $(tag)
+          latest
 
   - job: buildFrontend
     displayName: Building Frontend Carrsynth
@@ -110,4 +112,5 @@ stages:
         containerRegistry: $(dockerRegistryServiceConnection)
         tags: |
           $(tag)
+          latest
 
