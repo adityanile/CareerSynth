@@ -35,7 +35,7 @@ stages:
       inputs:
         command: buildAndPush
         repository: $(backendRepository)
-        dockerfile: $(dockerfilePath)
+        dockerfile: $(backendDockerfile)
         containerRegistry: $(dockerRegistryServiceConnection)
         tags: |
           $(tag)
