@@ -23,22 +23,36 @@ variables:
 
 stages:
 - stage: Build
-  displayName: Build and push stage
+  displayName: Build and Test Stage
   jobs:
-  - job: Build
-    displayName: Build
+  - job: buildBackend
+    displayName: Building Backend CareerSynth
     pool:
       vmImage: $(vmImageName)
     steps:
     - task: Docker@2
-      displayName: Build Backend and Push To Registry
+      displayName: Build Backend Docker Image
       inputs:
-        command: buildAndPush
+        command: build
         repository: $(backendRepository)
         dockerfile: $(backendDockerfile)
         containerRegistry: $(dockerRegistryServiceConnection)
         tags: |
           $(tag)
+    - task: Docker@2
+      displayName: Push The Backend Docker Image
+      inputs:
+        command: push
+        repository: $(backendRepository)
+        containerRegistry: $(dockerRegistryServiceConnection)
+        tags: |
+          $(tag)
+
+  - job: buildFrontend
+    displayName: Building Frontend Carrsynth
+    pool:
+      vmImage: $(vmImageName)
+    steps:
     - task: Docker@2
       displayName: Build Frontend and Push to Registry
       inputs:
