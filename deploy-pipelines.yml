@@ -1,0 +1,29 @@
+trigger:
+- master
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  backendRepository: 'careersynth-backend'
+  frontendRepository: 'careersynth-frontend'
+  containerRegistry: 'nilecr.azurecr.io'
+  tag: 'latest'
+
+stages:
+- stage: DeployBackend
+  displayName: Deploying Backend To Container Apps
+  jobs:
+    - job: DeployBackend
+      displayName: Deployting Container
+      pool:
+        vmImage: $(vmImageName)
+      steps:
+        - task: AzureContainerApps@1
+          inputs:
+            azureSubscription: 'ClyntoDev(21f93fb1-2eb3-4d38-ad22-01b51d1204cd)'
+            imageToDeploy: '$(containerRegistry)/$(backendRepository):$(tag)'
+            containerAppName: 'nile-backend'
+            resourceGroup: 'rg-dev-anile'
+            containerAppEnvironment: 'managedEnvironment-rgdevanile-b071'
+
