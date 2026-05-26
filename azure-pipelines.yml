@@ -115,3 +115,32 @@ stages:
           $(tag)
           latest
 
+- stage: Deploy
+  displayName: Deployment In Progress
+  jobs:
+    - job: DeployBackend
+      displayName: Deploying Container
+      pool:
+        vmImage: $(vmImageName)
+      steps:
+        - task: AzureContainerApps@1
+          inputs:
+            azureSubscription: 'ClyntoDev(21f93fb1-2eb3-4d38-ad22-01b51d1204cd)'
+            imageToDeploy: '$(containerRegistry)/$(backendRepository):$(tag)'
+            containerAppName: 'nile-backend'
+            resourceGroup: 'rg-dev-anile'
+            containerAppEnvironment: 'managedEnvironment-rgdevanile-b071'
+      
+    - job: DeployFrontend
+      displayName: Deploying Frontend
+      dependsOn: DeployBackend
+      pool:
+        vmImage: $(vmImageName)
+      steps:
+        - task: AzureContainerApps@1
+          inputs:
+            azureSubscription: 'ClyntoDev(21f93fb1-2eb3-4d38-ad22-01b51d1204cd)'
+            imageToDeploy: '$(containerRegistry)/$(frontendRepository):$(tag)'
+            containerAppName: 'nile-frontend'
+            resourceGroup: 'rg-dev-anile'
+            containerAppEnvironment: 'managedEnvironment-rgdevanile-b071'
