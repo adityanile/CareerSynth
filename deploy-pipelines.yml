@@ -9,13 +9,14 @@ variables:
   frontendRepository: 'careersynth-frontend'
   containerRegistry: 'nilecr.azurecr.io'
   tag: 'latest'
+  vmImageName: 'ubuntu-latest'
 
 stages:
 - stage: DeployBackend
   displayName: Deploying Backend To Container Apps
   jobs:
     - job: DeployBackend
-      displayName: Deployting Container
+      displayName: Deploying Container
       pool:
         vmImage: $(vmImageName)
       steps:
