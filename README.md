@@ -2,7 +2,7 @@
 
 ## 1. The Challenge
 
-**The project:** CareerSynth is a solo-built, production AI platform designed to help job seekers — students, developers, and professionals — cut through the most time-consuming parts of the job application process: writing resumes, crafting cover letters, and preparing for interviews.
+**The project:** CareerSynth is a production-grade AI platform designed to help job seekers — students, developers, and professionals — cut through the most time-consuming parts of the job application process: writing resumes, crafting cover letters, and preparing for interviews.
 
 **The problem:** The modern job application process is broken in a specific, quantifiable way. Tailoring a resume to a job description, writing a non-generic cover letter, and preparing meaningfully for interviews are each hours of work — and most job seekers are doing all three simultaneously across multiple applications. Generic resumes don't pass ATS filters. Generic cover letters don't get read. Interview prep without structure doesn't stick.
 
@@ -17,7 +17,7 @@ Building it solo meant every architectural decision had to justify its complexit
 
 ## 2. The Solution
 
-**The solution:** I designed and built CareerSynth end-to-end as a solo project — product, architecture, AI workflows, infrastructure, and CI/CD — deployed live at [careersynth.app](https://careersynth.app).
+**The solution:** I architected and developed CareerSynth end-to-end, including the application architecture, AI workflows, cloud infrastructure, and CI/CD pipeline, delivering a production-ready platform deployed live at [careersynth.app](https://careersynth.app).
 
 The platform runs on Azure Container Apps with a Next.js frontend and a Python FastAPI backend deployed as separate containers, powered by a single AI agent built on Microsoft Agent Framework with Azure OpenAI (GPT-4 / GPT-4o) handling all core career workflows. An Azure DevOps pipeline manages the full build and deployment lifecycle.
 
@@ -54,16 +54,16 @@ Resume generation was the hardest workflow to get right. The agent grounds every
 Cover letter generation is grounded in the same dual context — user resume plus job description — so outputs reference the user's actual background against the role's specific requirements rather than producing generic introductions. Interview preparation generates role-appropriate questions (technical and behavioural) with structured guidance, adapting to the target role and seniority rather than serving a fixed question bank.
 
 ### 4.4. Containerised Deployment on Azure Container Apps
-The Next.js frontend and FastAPI backend run as independent containers on Azure Container Apps, which was the right call over AKS for a solo-built platform at this stage — managed scaling, no cluster overhead, and straightforward container deployment without the operational tax of running a full Kubernetes control plane. Each container scales independently based on demand, and the separation means frontend changes can be deployed without touching the backend and vice versa.
+The Next.js frontend and FastAPI backend run as independent containers on Azure Container Apps, which was the right architectural choice for the platform's scale and operational requirements—providing managed scaling, minimal operational overhead, and straightforward container deployments without the complexity of managing a Kubernetes control plane. Each container scales independently based on demand, and the separation means frontend changes can be deployed without touching the backend and vice versa.
 
 ### 4.5. Azure DevOps CI/CD Pipeline
-An Azure DevOps pipeline handles the full delivery lifecycle — building both containers, running tests, and deploying to Azure Container Apps on every push. This meant from the first production deployment, there was no manual step between a code change and it being live. For a solo project with real users, having a reliable, automated deployment path wasn't optional — it was the only way to ship confidently without a team around to catch mistakes.
+An Azure DevOps pipeline handles the full delivery lifecycle — building both containers, running tests, and deploying to Azure Container Apps on every push. This meant from the first production deployment, there was no manual step between a code change and it being live. For a production platform serving real users, a reliable automated deployment pipeline was essential to ensure safe, repeatable, and consistent releases.
 
 ## 5. Business Outcomes
 
 > *CareerSynth is a live, production platform at careersynth.app with real users. Outcome metrics reflect the platform's designed capabilities and early production behaviour rather than a formal A/B comparison.*
 
-* **Live in production:** CareerSynth is deployed and serving real users at [careersynth.app](https://careersynth.app) — a solo-built, production-grade AI platform from architecture through to deployment, end-to-end.
+* **Live in production:** CareerSynth is deployed and serving real users at [careersynth.app](https://careersynth.app) — a production-grade AI platform showcasing modern cloud architecture, AI engineering, and automated DevOps practices.
 * **Full workflow coverage:** Resume generation, cover letter personalisation, and interview preparation delivered through a single agent, covering the three highest-effort parts of a job application in one platform.
 * **Automated delivery from day one:** Azure DevOps CI/CD pipeline means every change ships through an automated, tested deployment — no manual production steps, no "works on my machine" releases.
 * **Scalable without cluster overhead:** Azure Container Apps provides independent scaling for frontend and backend without the operational cost of managing an AKS cluster — the right trade-off for a solo-maintained, production platform.
@@ -71,4 +71,4 @@ An Azure DevOps pipeline handles the full delivery lifecycle — building both c
 
 ---
 
-*CareerSynth is an independent solo project — designed, built, and operated by Aditya Nile. Live at [careersynth.app](https://careersynth.app).*
+*CareerSynth is an independent AI platform architected and developed by Aditya Nile, demonstrating modern Azure cloud architecture, AI engineering, and production DevOps practices. Live at [careersynth.app](https://careersynth.app).*
